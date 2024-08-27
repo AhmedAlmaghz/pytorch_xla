@@ -1,34 +1,30 @@
 # The Cloud TPU Workflow
 
-The goal of this guide is to set up an interactive development environment on a
-Cloud TPU with PyTorch/XLA installed. If this is your first time using TPUs, we
-recommend you start with
+هدف هذا الدليل هو إعداد بيئة تطوير تفاعلية على
+Cloud TPU مع PyTorch/XLA المثبت. إذا كانت هذه هي المرة الأولى التي تستخدم فيها TPUs، فإننا
+نوصي ببدء استخدام
 [Colab](https://colab.sandbox.google.com/github/tensorflow/docs/blob/master/site/en/guide/tpu.ipynb)
-and [Kaggle](https://www.kaggle.com/discussions/product-feedback/369338) or.
-Both options have PyTorch/XLA preinstalled with dependencies and ecosystem
-packages. For an up-to-date list of examples, see our main
-[`README`](https://github.com/pytorch/xla).
+و [Kaggle](https://www.kaggle.com/discussions/product-feedback/369338) أو.
+كلتا الخيارين لديها PyTorch/XLA مثبتة مسبقًا مع التبعيات وحزم النظام البيئي
+الحزم. للحصول على قائمة محدثة من الأمثلة، راجع قائمة [README](https://github.com/pytorch/xla) الرئيسية لدينا.
 
-If you would like to set up a more customized development environment, keep
-reading.
+إذا كنت ترغب في إعداد بيئة تطوير أكثر تخصيصًا، فاستمر في القراءة.
 
 ## Visual Studio Code
 
-Prerequisites:
+المتطلبات الأساسية:
 
-- [Visual Studio Code](https://code.visualstudio.com/download) with the [Remote
+- [Visual Studio Code](https://code.visualstudio.com/download) مع [Remote
   Development
   extensions](https://code.visualstudio.com/docs/remote/remote-overview)
-  installed on your local machine
-- A GCP project with Cloud TPU quota. For more information about requesting
-  Cloud TPU quota, see the [official
-  documentation](https://cloud.google.com/tpu/docs/quota)
-- An SSH key registered with `ssh-agent`. If you have not already done this, see
-  [GitHub's
-  documentation](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent)
+  المثبتة على جهازك المحلي
+- مشروع GCP مع حصة Cloud TPU. للحصول على مزيد من المعلومات حول طلب
+  حصة Cloud TPU، راجع الوثائق [الرسمية](https://cloud.google.com/tpu/docs/quota).
+- مفتاح SSH مسجل مع `ssh-agent`. إذا لم تقم بذلك بالفعل، فراجع وثائق
+  [GitHub](https://docs.github.com/en/authentication/connecting-to-github-with-ssh/generating-a-new-ssh-key-and-adding-it-to-the-ssh-agent).
 
-Before you begin, export environment variables with the GCP project and zone
-where you have Cloud TPU quota:
+قبل البدء، قم بتصدير متغيرات البيئة مع مشروع GCP والمنطقة
+حيث لديك حصة Cloud TPU:
 
 ```
 export PROJECT=...
@@ -36,60 +32,59 @@ export ZONE=...
 export TPU_TYPE=... # e.g. "v2-8"
 ```
 
-### Creating and connecting to your TPU
+### إنشاء والاتصال بجهاز TPU الخاص بك
 
-Create a Cloud TPU VM with your SSH key registered:
+قم بإنشاء جهاز TPU VM مع مفتاح SSH الخاص بك مسجل:
 
 ```bash
-# Assuming your SSH key is named `id_ed25519`
+# افتراض أن مفتاح SSH الخاص بك يسمى `id_ed25519`
 gcloud compute tpus tpu-vm create --project=$PROJECT --zone=$ZONE --accelerator-type=$TPU_TYPE --version=tpu-ubuntu2204-base --metadata="ssh-keys=$USER:$(cat ~/.ssh/id_ed25519.pub)" $USER-tpu
 ```
 
-Check that your TPU has an external IP and SSH to it:
+تحقق من أن جهاز TPU الخاص بك لديه عنوان IP خارجي واتصال SSH به:
 
 ```bash
 gcloud compute tpus tpu-vm describe --project=$PROJECT --zone=$ZONE $USER-tpu --format="value(networkEndpoints.accessConfig.externalIp)"
 # Output: 123.123.123.123
 ```
 
-Give your TPU a friendly name to make future steps easier:
+أعطِ جهاز TPU الخاص بك اسمًا ودودًا لتسهيل الخطوات المستقبلية:
 
 ```bash
 echo -e Host $USER-tpu "\n " HostName $(gcloud compute tpus tpu-vm describe --project=$PROJECT --zone=$ZONE $USER-tpu --format="value(networkEndpoints.accessConfig.externalIp)") >> ~/.ssh/config
 ```
 
-SSH to your TPU to test your connection:
+اتصال SSH بجهاز TPU الخاص بك لاختبار الاتصال:
 
 ```
 ssh $USER-tpu
 ```
 
-### Setting up a Visual Studio Code workspace with PyTorch/XLA
+### إعداد مساحة عمل Visual Studio Code مع PyTorch/XLA
 
-From the [VS Code Command
-Palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette),
-select [`Remote-SSH: Connect to
-Host`](https://code.visualstudio.com/docs/remote/ssh) and select the host you
-just created (named `$USER-tpu`). VS Code will then open a new window connected
-to your TPU VM.
+من [VS Code Command
+Palette](https://code.visualstudio.com/docs/getstarted/userinterface#_command-palette)،
+حدد [`Remote-SSH: Connect to
+Host`](https://code.visualstudio.com/docs/remote/ssh) وحدد المضيف الذي أنشأته للتو (يسمى `$USER-tpu`). بعد ذلك، سيقوم VS Code بفتح نافذة جديدة متصلة
+بجهاز TPU VM الخاص بك.
 
-From the built-in `Terminal`, create a new folder to use as a workspace (e.g.
-`mkdir ptxla`). Then open the folder from the UI or Command Palette.
+من المحطة الطرفية المدمجة، قم بإنشاء مجلد جديد لاستخدامه كمساحة عمل (على سبيل المثال
+`mkdir ptxla`). بعد ذلك، افتح المجلد من واجهة المستخدم أو شريط الأوامر.
 
-Note: It is optional (but recommended) at this point to install the official
+ملاحظة: من الاختياري (ولكن يوصى به) في هذه المرحلة تثبيت الإضافية الرسمية
 [Python
 extension](https://marketplace.visualstudio.com/items?itemName=ms-python.python)
-and create a [`venv` virtual
+وإنشاء [`venv` virtual
 environment](https://code.visualstudio.com/docs/python/environments#_using-the-create-environment-command)
-via the Command Palette (`Python: Create Environment`).
+عبر شريط الأوامر (`Python: Create Environment`).
 
-Install the latest PyTorch and PyTorch/XLA releases:
+قم بتثبيت أحدث إصدارات PyTorch و PyTorch/XLA:
 
 ```
 pip install numpy torch torch_xla[tpu] -f https://storage.googleapis.com/libtpu-releases/index.html
 ```
 
-Create a file `test.py`:
+قم بإنشاء ملف `test.py`:
 
 ```python
 import torch_xla as xla
@@ -100,16 +95,15 @@ xla.runtime.set_device_type("TPU")
 print("XLA devices:", xla.real_devices())
 ```
 
-Run the test script from your terminal:
+قم بتشغيل البرنامج النصي للاختبار من المحطة الطرفية الخاصة بك:
 
 ```bash
 $ python test.py
 # Output: XLA devices: ['TPU:0', 'TPU:1', 'TPU:2', 'TPU:3', 'TPU:4', 'TPU:5', 'TPU:6', 'TPU:7']
-# Number of devices will vary based on TPU type
+# سيختلف عدد الأجهزة بناءً على نوع TPU
 ```
 
-### Next steps
+### الخطوات التالية
 
-That's it! You should now have a remote Visual Studio Code workspace set up with
-PyTorch/XLA installed. To run more realistic examples, see our [examples
-guide](https://github.com/pytorch/xla/tree/master/examples).
+هذا كل شيء! يجب أن يكون لديك الآن مساحة عمل Visual Studio Code عن بُعد تم إعدادها مع
+تم تثبيت PyTorch/XLA. لتشغيل أمثلة أكثر واقعية، راجع دليل [الأمثلة](https://github.com/pytorch/xla/tree/master/examples) الخاص بنا.
