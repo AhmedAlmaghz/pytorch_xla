@@ -1,137 +1,137 @@
-# PyTorch/XLA Glossary
+# PyTorch/XLA دليل المصطلحات
 
-This glossary defines common terms used in the PyTorch/XLA documentation.
+يحدد هذا دليل المصطلحات الشائعة المستخدمة في وثائق PyTorch/XLA.
 
 ## A
 
-**Accelerator** - A specialized hardware component designed to accelerate specific computational tasks, such as deep learning. Examples include GPUs and TPUs.
+**معالج تسريع** - مكون عتاد مخصص مصمم لتسريع مهام حسابية محددة، مثل التعلم العميق. تشمل الأمثلة وحدات معالجة الرسوميات (GPUs) ووحدات معالجة الدفعة (TPUs).
 
 ## B
 
-**Barrier** - In the context of PyTorch/XLA, a synchronization point that ensures all operations on XLA tensors have completed before proceeding. It's often used to ensure the host (CPU) and device (TPU/GPU) are synchronized.
+**حاجز**: في سياق PyTorch/XLA، هي نقطة تزامن تضمن اكتمال جميع العمليات على tensors XLA قبل المتابعة. ويُستخدم غالبًا للتأكد من أن المضيف (وحدة المعالجة المركزية) والجهاز (TPU/GPU) متزامنان.
 
-**bfloat16** - A 16-bit floating-point data type commonly used on TPUs for faster training.
+**bfloat16**: نوع بيانات عائم بنقطة عائمة مكون من 16 بت يُستخدم بشكل شائع في وحدات معالجة الدفعة (TPUs) لتدريب أسرع.
 
 ## C
 
-**CUDA** -  A parallel computing platform and programming model developed by NVIDIA for use with their GPUs.
+**CUDA**: منصة حوسبة متوازية ونموذج برمجة طورهما NVIDIA لاستخدامهما مع وحدات معالجة الرسوميات (GPU).
 
-**Core Aten Op Set** - A collection of fundamental operations from PyTorch's ATen library considered essential for core functionality and model export.
+**مجموعة عمليات Core Aten**: مجموعة من العمليات الأساسية من مكتبة ATen في PyTorch تعتبر أساسية للوظائف الأساسية وتصدير النماذج.
 
 ## D
 
-**Data Parallelism** - A parallelization strategy where the same model is replicated on multiple devices, with each device processing a different subset of the training data.
+**التكرار المتوازي للبيانات**: استراتيجية موازية يتم فيها تكرار نفس النموذج على أجهزة متعددة، حيث تقوم كل جهاز بمعالجة مجموعة فرعية مختلفة من بيانات التدريب.
 
-**Device Mesh** - A logical representation of the interconnected devices (TPUs/GPUs) used for distributed training, defining the arrangement and communication paths between them.
+**شبكة الأجهزة**: تمثيل منطقي للأجهزة المترابطة (TPUs/GPUs) المستخدمة للتدريب الموزع، والذي يحدد ترتيب أجهزة الاتصال ومساراتها.
 
-**DistributedDataParallel (DDP)** - A PyTorch module that enables data-parallel training across multiple devices, typically used in conjunction with torch.distributed.
+**DistributedDataParallel (DDP)**: وحدة نمطية PyTorch تتيح التدريب المتوازي للبيانات عبر أجهزة متعددة، ويتم استخدامها عادةً بالاقتران مع torch.distributed.
 
-**Distributed Tensor** - A PyTorch API for representing tensors distributed across multiple devices, facilitating parallel and distributed computation.
+**Distributed Tensor**: واجهة برمجة التطبيقات (API) في PyTorch لتمثيل tensors الموزعة عبر أجهزة متعددة، مما يسهل الحساب المتوازي والموزع.
 
-**Dynamo** (See **TorchDynamo**)
+**دينامو** (انظر **TorchDynamo**)
 
 ## E
 
-**Eager Execution** -  A computational model where operations are executed immediately as they are encountered in the code, as opposed to graph execution.
+**التنفيذ التواقتي**: نموذج حسابي يتم فيه تنفيذ العمليات فورًا عند مواجهتها في التعليمات البرمجية، على عكس تنفيذ الرسم البياني.
 
-**Environment Variables** - Variables that can be set outside of a program to control its behavior, often used in PyTorch/XLA to configure runtime options.
+**متغيرات البيئة**: متغيرات يمكن تعيينها خارج البرنامج للتحكم في سلوكه، ويتم استخدامها غالبًا في PyTorch/XLA لتكوين خيارات وقت التشغيل.
 
 ## F
 
-**FSDP (Fully Sharded Data Parallel)** - A data-parallel training technique that shards model parameters, gradients, and optimizer states across devices
+**FSDP (Fully Sharded Data Parallel)**: تقنية تدريب متوازي للبيانات تقوم بتجزئة معلمات النموذج والتدرجات وحالات المحسن عبر الأجهزة.
 
-**FX (TorchFX)** -  An intermediate representation (IR) format used in PyTorch for representing computation graphs in a more structured way.
+**FX (TorchFX)**: تنسيق تمثيل وسيط (IR) المستخدم في PyTorch لتمثيل مخططات الحساب بطريقة أكثر تنظيماً.
 
-**Functionalization** - A process of converting eager execution code into a functional representation, allowing for greater optimization and compilation opportunities.
+**الوظيفية**: عملية تحويل التعليمات البرمجية لتنفيذ التواقت إلى تمثيل وظيفي، مما يسمح بفرص أكبر للتحسين والترجمة.
 
 ## G
 
-**GSPMD (General and Scalable Parallelization for ML Computation Graphs)** - A single API that enables a large variety of parallelism algorithms (including data parallelism, fully sharded data parallelism, spatial partitioning tensor and pipeline parallelism, as well as combinations of these algorithms) for different ML workloads and model architectures.
+**GSPMD (General and Scalable Parallelization for ML Computation Graphs)**: واجهة برمجة تطبيقات (API) واحدة تمكّن مجموعة كبيرة من خوارزميات التوازي (بما في ذلك التوازي المتوازي للبيانات، والتوازي المتوازي الكامل للبيانات، وتقسيم الفضاء، وتوازي الأنابيب، بالإضافة إلى مجموعات من هذه الخوارزميات) لمختلف أعباء العمل في مجال التعلم الآلي وهندسات النماذج.
 
 ## H
 
-**HLO (High-Level Optimizer)** - An intermediate representation (IR) format used by the XLA compiler, representing a computation graph at a higher level than machine code.
+**HLO (High-Level Optimizer)**: تنسيق تمثيل وسيط (IR) يستخدمه مترجم XLA، ويمثل مخطط حساب بمستوى أعلى من لغة الآلة.
 
-**Hugging Face** - A community and platform providing tools and resources for natural language processing, including pre-trained models and a popular Trainer API.
+**Hugging Face**: مجتمع ومنصة توفر أدوات وموارد لمعالجة اللغات الطبيعية، بما في ذلك النماذج المدربة مسبقًا وواجهة برمجة تطبيقات (API) Trainer الشهيرة.
 
 ## I
 
-**IR (Intermediate Representation)** - A representation of a program or computation graph that is more abstract than machine code but closer to it than the original source code.
+**IR (Intermediate Representation)**: تمثيل لبرنامج أو مخطط حساب أكثر تجريدًا من لغة الآلة ولكنه أقرب إليه من التعليمات البرمجية المصدر الأصلية.
 
 ## J
 
-**JAX** - A high-performance numerical computation library developed by Google, known for its automatic differentiation and XLA integration.
+**JAX**: مكتبة حوسبة عددية عالية الأداء طورتها Google، تشتهر بالتفاضل التلقائي وتكامل XLA.
 
-**JIT (Just-in-Time Compilation)** -  A compilation strategy where code is compiled at runtime, as needed, offering flexibility and potential optimizations based on runtime information.
+**JIT (Just-in-Time Compilation)**: استراتيجية ترجمة يتم فيها ترجمة التعليمات البرمجية في وقت التشغيل، حسب الحاجة، مما يوفر المرونة والتحسينات المحتملة بناءً على معلومات وقت التشغيل.
 
 ## K
 
-**Kaggle** - An online community and platform for machine learning practitioners to share code and solutions.
+**Kaggle**: مجتمع ومنصة عبر الإنترنت لممارسي التعلم الآلي لمشاركة التعليمات البرمجية والحلول.
 
 ## L
 
-**Lazy Tensor** -  A type of tensor in PyTorch/XLA that delays operation execution until the results are explicitly needed, allowing for graph optimization and XLA compilation.
+**Lazy Tensor**: نوع من tensor في PyTorch/XLA يؤخر تنفيذ العملية حتى تكون النتائج مطلوبة بشكل صريح، مما يسمح بتحسين الرسم البياني وترجمة XLA.
 
-**Lit-GPT** - Implements open-source large language models in XLA and supports fine-tuning
+**Lit-GPT**: ينفذ نماذج اللغة مفتوحة المصدر الكبيرة في XLA ويدعم الضبط الدقيق
 
 ## M
 
-**Model Parallelism** - A parallelization strategy where different parts of a model are distributed across multiple devices, enabling training of models too large to fit on a single device.
+**التوازي النموذجي**: استراتيجية موازية يتم فيها توزيع أجزاء مختلفة من نموذج عبر أجهزة متعددة، مما يمكّن من تدريب نماذج كبيرة جدًا بحيث لا يمكنها أن تتسع لجهاز واحد.
 
-**Multiprocessing** -  A programming technique for running multiple processes concurrently, often used in PyTorch/XLA to utilize multiple TPU cores.
+**تعدد المعالجة**: تقنية برمجة لتشغيل عمليات متعددة بشكل متزامن، ويتم استخدامها غالبًا في PyTorch/XLA لاستخدام أنوية TPU متعددة.
 
-**MpDeviceLoader** - A PyTorch/XLA utility for efficiently loading and distributing data across multiple devices during training.
+**MpDeviceLoader**: أداة PyTorch/XLA لتحميل البيانات وتوزيعها بكفاءة عبر أجهزة متعددة أثناء التدريب.
 
 ## N
 
-**NCCL (NVIDIA Collective Communications Library)** - A library for efficient collective communication operations (e.g., all-reduce, all-gather) on NVIDIA GPUs.
+**NCCL (NVIDIA Collective Communications Library)**: مكتبة لعمليات الاتصال الجماعي الفعالة (مثل all-reduce، all-gather) على وحدات معالجة الرسوميات (GPUs) الخاصة بشركة NVIDIA.
 
 ## O
 
-**OpenXLA** - An open-source project aimed at developing and maintaining XLA, the deep learning compiler.
+**OpenXLA**: مشروع مفتوح المصدر يهدف إلى تطوير وصيانة XLA، وهو مترجم التعلم العميق.
 
-**Ordinal** - A unique identifier for a device (TPU/GPU) within a distributed training setup, often used to determine the device's role and data partitioning.
+**Ordinal**: معرف فريد لجهاز (TPU/GPU) داخل إعداد تدريب موزع، ويستخدم غالبًا لتحديد دور الجهاز وتقسيم البيانات.
 
 ## P
 
-**Partition Spec** -  In GSPMD, a specification that defines how a tensor is sharded across a device mesh.
+**محدد التقسيم**: في GSPMD، مواصفات تحدد كيفية تجزئة tensor عبر شبكة الأجهزة.
 
-**PJRT (Portable JAX Runtime)** - A runtime environment for JAX that supports multiple backends.
+**PJRT (Portable JAX Runtime)**: بيئة وقت تشغيل لـ JAX تدعم وحدات خلفية متعددة.
 
-**Pod** - A group of interconnected TPU hosts, offering massive scale for training large models.
+**Pod**: مجموعة من مضيفي TPU المترابطين، توفر نطاقًا واسعًا لتدريب النماذج الكبيرة.
 
-**Preemption** - An event where a Cloud TPU is reclaimed by the cloud provider, requiring checkpointing to avoid losing training progress.
+**الاستيلاء**: حدث يتم فيه استرداد Cloud TPU بواسطة موفر السحابة، مما يتطلب نقطة تفتيش لتجنب فقدان تقدم التدريب.
 
 ## R
 
-**Rendezvous** - Used by Torch Distributed Elastic to gather participants of a training job (i.e. nodes) such that they all agree on the same list of participants and everyone’s roles, as well as make a consistent collective decision on when training can begin/resume.
+**Rendezvous**: يستخدمها Torch Distributed Elastic لجمع المشاركين في مهمة تدريب (أي العقد) بحيث يتفقون جميعًا على نفس قائمة المشاركين وأدوار الجميع، وكذلك اتخاذ قرار جماعي متسق بشأن متى يمكن بدء/استئناف التدريب.
 
-**Replication** - A data distribution strategy where a tensor is fully copied to all devices in a mesh, ensuring all devices have the same data.
+**التكرار**: استراتيجية توزيع البيانات حيث يتم نسخ tensor بالكامل إلى جميع الأجهزة الموجودة في الشبكة، مما يضمن أن تحتوي جميع الأجهزة على نفس البيانات.
 
 ## S
 
-**Sharding** - The process of dividing a tensor into smaller pieces (shards) and distributing them across devices, commonly used to reduce memory footprint and enable parallel computation.
+**التجزئة**: عملية تقسيم tensor إلى قطع أصغر (شظايا) وتوزيعها عبر الأجهزة، والتي تستخدم غالبًا لتقليل البصمة الذاكرية وتمكين الحساب المتوازي.
 
-**SPMD (Single Program, Multiple Data)** - A parallel programming model where the same program is executed on multiple devices.
+**SPMD (Single Program, Multiple Data)**: نموذج برمجة متوازي يتم فيه تنفيذ نفس البرنامج على أجهزة متعددة.
 
-**State Dict**- A Python dictionary object that maps each layer to its parameter tensor. It is used for saving or loading models.
+**State Dict**: كائن قاموس Python يقوم بتعيين كل طبقة إلى tensor المعلمة الخاصة بها. ويستخدم لحفظ النماذج أو تحميلها.
 
 ## T
 
-**TensorBoard** - A visualization tool for monitoring and analyzing training progress, including performance metrics and computation graphs.
+**TensorBoard**: أداة تصور لمراقبة وتحليل تقدم التدريب، بما في ذلك مقاييس الأداء ومخططات الحساب.
 
-**TorchDynamo** - A Python-level JIT compiler for PyTorch, dynamically modifying bytecode to enable graph capture and optimization.
+**TorchDynamo**: مترجم JIT على مستوى Python لـ PyTorch، يقوم بتعديل البايت كود ديناميكيًا لتمكين التقاط الرسم البياني والتحسين.
 
-**TPU (Tensor Processing Unit)** - A custom-designed machine learning accelerator developed by Google, offering high performance for deep learning workloads.
+**وحدة معالجة الدفعة (TPU)**: معالج تسريع التعلم الآلي المصمم خصيصًا والذي طورته Google، والذي يوفر أداءً عاليًا لأعباء عمل التعلم العميق.
 
 ## X
 
-**XLA (Accelerated Linear Algebra)** - A deep learning compiler developed by Google.
+**XLA (Accelerated Linear Algebra)**: مترجم تعلم عميق طورته Google.
 
-**XLATensor** - A tensor type in PyTorch/XLA representing data on an XLA device, enabling lazy execution and XLA compilation.
+**XLATensor**: نوع tensor في PyTorch/XLA يمثل بيانات على جهاز XLA، مما يمكّن التنفيذ البطيء وترجمة XLA.
 
-**xla_device()** - A PyTorch/XLA function for retrieving the current XLA device.
+**xla_device()**: وظيفة PyTorch/XLA لاسترداد جهاز XLA الحالي.
 
-**xm (xla_model)** - A module in PyTorch/XLA providing core functions for interacting with XLA devices and executing computations.
+**xm (xla_model)**: وحدة نمطية في PyTorch/XLA توفر وظائف أساسية للتفاعل مع أجهزة XLA وتنفيذ الحسابات.
 
-**xmp (xla_multiprocessing)** - A module in PyTorch/XLA for launching distributed training processes across multiple XLA devices.
+**xmp (xla_multiprocessing)**: وحدة نمطية في PyTorch/XLA لبدء عمليات التدريب الموزعة عبر أحدات XLA متعددة.
