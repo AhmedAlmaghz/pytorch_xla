@@ -1,9 +1,10 @@
-# Distributed Checkpointing
-PyTorch/XLA SPMD is compatible with the [torch.distributed.checkpoint](https://pytorch.org/docs/stable/distributed.checkpoint.html) library through a dedicated `Planner` instance. Users are able to synchronously save and load checkpoints through this common interface.
+# الحفظ الموزع للإشارات المرجعية
 
-The SPMDSavePlanner and SPMDLoadPlanner ([src](https://github.com/pytorch/xla/blob/master/torch_xla/experimental/distributed_checkpoint.py)) classes enable the `save` and `load` functions to operate directly on the shards of an `XLAShardedTensor`, enabling all of the benefits of distributed checkpointing in SPMD training.
+يتوافق PyTorch/XLA SPMD مع مكتبة [torch.distributed.checkpoint](https://pytorch.org/docs/stable/distributed.checkpoint.html) من خلال مثيل مخصص لـ `Planner`. يمكن للمستخدمين حفظ الأحمال المرجعية وتحميلها بشكل متزامن من خلال هذا الواجهة العامة.
 
-Here is a demonstration of the synchronous distributed checkpointing API:
+تمكّن فئات SPMDSavePlanner و SPMDLoadPlanner ([src](https://github.com/pytorch/xla/blob/master/torch_xla/experimental/distributed_checkpoint.py)) وظائف "الحفظ" و"التحميل" من العمل مباشرة على شرائح XLAShardedTensor، مما يتيح جميع مزايا الحفظ الموزع للإشارات المرجعية في التدريب SPMD.
+
+فيما يلي توضيح لواجهة برمجة التطبيقات الموزعة المتزامنة للإشارات المرجعية:
 
 ```python
 import torch.distributed.checkpoint as dist_cp
@@ -38,29 +39,20 @@ model.load_state_dict(state_dict["model"])
 
 #### CheckpointManager
 
-The experimental [CheckpointManager](https://github.com/pytorch/xla/blob/master/torch_xla/experimental/distributed_checkpoint/manager.py#L40)
-interface provides a higher-level API over the `torch.distributed.checkpoint`
-functions to enable a few key features:
+توفر واجهة [CheckpointManager](https://github.com/pytorch/xla/blob/master/torch_xla/experimental/distributed_checkpoint/manager.py#L40) التجريبية واجهة برمجة تطبيقات أعلى مستوى من وظائف `torch.distributed.checkpoint` لتمكين بعض الميزات الرئيسية:
 
-- **Managed checkpoints**: Each checkpoint taken by the `CheckpointManager` is
-identified by the step at which it was taken. All steps tracked are accessible
-through the `CheckpointManager.all_steps` method, and any tracked steps can be
-restored using `CheckpointManager.restore`.
-- **Asynchronous checkpointing**: Checkpoints taken through the
-`CheckpointManager.save_async` API are written to persistent storage
-asynchronously to unblock training for the duration of the checkpoint. The
-input sharded state_dict is first moved to CPU before the checkpoint is
-dispatched to a background thread.
-- **Auto-checkpointing on preemption**: On Cloud TPU, preemptions can be detected
-and a checkpoint taken before the process is terminated. To use, ensure your
-TPU is provisioned through a QueuedResource with
-[Autocheckpointing enabled](https://cloud.google.com/sdk/gcloud/reference/alpha/compute/tpus/queued-resources/create#--autocheckpoint-enabled),
-and ensure the `chkpt_on_preemption` parameter is set when constructing the
-CheckpointManager (this option is enabled by default).
-- **FSSpec Support**: `CheckpointManager` uses an fsspec storage backend to enable
-checkpointing directly to any fsspec-compatible filesystem, including GCS.
+- **الإشارات المرجعية المُدارة**: يتم تحديد كل إشارة مرجعية يتم أخذها بواسطة CheckpointManager
+من خلال الخطوة التي تم اتخاذها. يمكن الوصول إلى جميع الخطوات التي يتم تتبعها
+من خلال طريقة CheckpointManager.all_steps، ويمكن استعادة أي خطوات يتم تتبعها
+باستخدام CheckpointManager.restore.
 
-Example usage of the CheckpointManager is below:
+- **الحفظ الموزع غير المتزامر**: يتم كتابة الإشارات المرجعية المتخذة من خلال واجهة برمجة تطبيقات CheckpointManager.save_async بشكل غير متزامر إلى التخزين الدائم لإلغاء حظر التدريب أثناء الإشارة المرجعية. يتم أولاً نقل القاموس المُجزء إلى وحدة المعالجة المركزية قبل إرسال الإشارة المرجعية إلى مؤشر ترابط في الخلفية.
+
+- **الحفظ التلقائي عند الاستيلاء**: يمكن اكتشاف عمليات الاستيلاء على Cloud TPU واتخاذ إشارة مرجعية قبل إنهاء العملية. لاستخدام هذه الميزة، تأكد من تخصيص وحدة TPU الخاصة بك من خلال QueuedResource مع [تمكين الحفظ التلقائي](https://cloud.google.com/sdk/gcloud/reference/alpha/compute/tpus/queued-resources/create#--autocheckpoint-enabled)، وتأكد من تعيين معلمة chkpt_on_preemption عند إنشاء CheckpointManager (يكون هذا الخيار ممكّنًا بشكل افتراضي).
+
+- **دعم FSSpec**: يستخدم CheckpointManager backend للتخزين المستند إلى FSSpec لتمكين الحفظ المباشر إلى أي نظام ملفات متوافق مع FSSpec، بما في ذلك GCS.
+
+مثال على استخدام CheckpointManager موضح أدناه:
 
 ```python
 from torch_xla.experimental.distributed_checkpoint import CheckpointManager, prime_optimizer
@@ -90,36 +82,27 @@ for step, data in enumerate(dataloader):
         print(f'Checkpoint taken at step {step}')
 ```
 
-##### Restoring Optimizer State
+##### استعادة حالة المحسن
 
-In distributed checkpointing, the state_dicts are loaded in-place, and only the
-required shards of the checkpoint are loaded. Since optimizer states are lazily
-created, the state isn't present until the first `optimizer.step` call, and
-attempts to load an unprimed optimizer will fail.
+في الحفظ الموزع للإشارات المرجعية، يتم تحميل القواميس الحالة في المكان، ويتم تحميل الشرائح المطلوبة فقط من الإشارة المرجعية. نظرًا لأن حالات المحسن يتم إنشاؤها بشكل مؤجل، فإن الحالة لا تكون موجودة حتى يتم إجراء أول مكالمة `optimizer.step`، وستفشل محاولات تحميل المحسن غير الممهد.
 
-The utility method `prime_optimizer` is provided for this: it runs a fake train
-step by setting all gradients to zero and calling `optimizer.step`. *This is a
-destructive method and will touch both model parameters and optimizer state*,
-so it should only be called just prior to restoration.
+يتم توفير طريقة utility `prime_optimizer` لهذا الغرض: فهي تقوم بتشغيل خطوة تدريب وهمية عن طريق تعيين جميع التدرجات إلى الصفر واستدعاء `optimizer.step`. *هذه طريقة مدمرة وستؤثر على كل من معلمات النموذج وحالة المحسن*، لذا يجب استدعاؤها فقط قبل الاستعادة مباشرة.
 
-### Process Groups
-To use `torch.distributed` APIs such as distributed checkpointing, a process
-group is required. In SPMD mode, the `xla` backend is not supported since the
-compiler is responsible for all collectives.
+### مجموعات العمليات
 
-Instead, a CPU process group such as `gloo` must be used. On TPUs, the `xla://`
-init_method is still supported to discover the master IP, global world size,
-and host rank. An example initialization is below:
+لاستخدام واجهات برمجة التطبيقات الموزعة لـ `torch.distributed` مثل الحفظ الموزع للإشارات المرجعية، مطلوب مجموعة عمليات. في وضع SPMD، لا يتم دعم backend "xla" لأن المترجم مسؤول عن جميع العمليات الجماعية.
+
+بدلاً من ذلك، يجب استخدام مجموعة عمليات وحدة المعالجة المركزية مثل "gloo". في وحدات TPU، لا يزال init_method "xla://" مدعومًا لاكتشاف عنوان IP الرئيسي وحجم العالم العالمي والترتيب المضيف. موضح أدناه مثال على التهيئة:
 
 ```python
 import torch.distributed as dist
-# Import to register the `xla://` init_method
+# استيراد لتسجيل init_method "xla://"
 import torch_xla.distributed.xla_backend
 import torch_xla.runtime as xr
 
 xr.use_spmd()
 
-# The `xla://` init_method will automatically discover master worker IP, rank,
-# and global world size without requiring environment configuration on TPUs.
+# ستكتشف طريقة init_method "xla://" تلقائيًا عنوان IP الرئيسي للعمال وحجم العالم العالمي والترتيب
+# دون الحاجة إلى تكوين البيئة على وحدات TPU.
 dist.init_process_group('gloo', init_method='xla://')
 ```
