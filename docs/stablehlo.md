@@ -1,11 +1,8 @@
-Torch Export to StableHLO
---------------------------
+# التحويل من Torch إلى StableHLO
 
-This document describes how to use torch export + torch xla to export to 
-[StableHLO](https://github.com/openxla/stablehlo) format.
+يصف هذا المستند كيفية استخدام التصدير الشعلة + الشعلة xla للتصدير إلى تنسيق [StableHLO](https://github.com/openxla/stablehlo).
 
-
-## How to use:
+## كيفية الاستخدام:
 
 ```python
 from torch.export import export
@@ -26,57 +23,57 @@ stablehlo_program = exported_program_to_stablehlo(exported)
 # Now stablehlo_program is a callable backed by stablehlo IR.
 
 # we can see it's stablehlo code with
-#   here 'forward' is the name of function. Currently we only support
-#   one entry point per program, but in the future we will support
-#   multiple entry points in a program.
+# Here 'forward' is the name of the function. Currently we only support
+# one entry point per program, but in the future we will support
+# multiple entry points in a program.
 print(stablehlo_program.get_stablehlo_text('forward'))
 
 # we can also print out the bytecode
 print(stablehlo_program.get_stablehlo_bytecode('forward'))
 
-# we can also run the module, to run the stablehlo module, we need to move 
+# we can also run the module, to run the stablehlo module, we need to move
 # our tensors to XLA device.
 sample_input_xla = tuple(s.to(xla_device) for s in sample_input)
 
-output2 = stablehlo_program(*sample_input_xla) 
-print(torch.allclose(output, output2.cpu(), atol=1e-5)) 
+output2 = stablehlo_program(*sample_input_xla)
+print(torch.allclose(output, output2.cpu(), atol=1e-5))
 ```
 
-# Saving StableHLO bytecodes to disk
+# حفظ تعليمات StableHLO البرمجية على القرص:
 
-One can now save stablehlo to disk with 
+يمكنك الآن حفظ stablehlo على القرص باستخدام:
+
 ```python
 stablehlo_program.save('/tmp/stablehlo_dir')
 ```
-The path should be path to an empty directory. If it doesn't exist, it will be created.
-This directory can be loaded again as another stablehlo_program:
+
+يجب أن يكون المسار هو المسار إلى دليل فارغ. إذا لم يكن موجودًا، فسيتم إنشاؤه.
+
+يمكن تحميل هذا الدليل مرة أخرى كـ stablehlo_program آخر:
 
 ```python
 from torch_xla.stablehlo import StableHLOGraphModule
 stablehlo_program2 = StableHLOGraphModule.load('/tmp/stablehlo_dir')
-output3 = stablehlo_program2(*sample_input_xla) 
+output3 = stablehlo_program2(*sample_input_xla)
 ```
 
-# Convert saved StableHLO for serving
+# تحويل StableHLO المحفوظة للخدمة:
 
-StableHLO is an open format and it is supported for serving in  [tensorflow.serving](https://github.com/tensorflow/serving) model server. However, before giving it to tf.serving, we need to first
-wrap the generated StableHLO bytecode into a `tf.saved_model` format.
+StableHLO هو تنسيق مفتوح ومدعوم للخدمة في خادم نموذج [tensorflow.serving](https://github.com/tensorflow/serving). ومع ذلك، قبل تقديمه إلى tf.serving، يلزم أولاً تغليف تعليمات StableHLO البرمجية المولدة في تنسيق `tf.saved_model`.
 
-For that, first ensure that you have the latest `tensorflow` install in the current python env,
-if not, install with
+للقيام بذلك، تأكد أولاً من تثبيت أحدث إصدار من tensorflow في بيئة Python الحالية، وإذا لم يكن الأمر كذلك، فقم بالتثبيت باستخدام:
 
 ```bash
 pip install tf-nightly
 ```
 
-Now, you can run a converter (provided in the torch/xla installation)
+الآن، يمكنك تشغيل محول (مقدم في تثبيت torch/xla)
+
 ```
 stablehlo-to-saved-model /tmp/stablehlo_dir /tmp/resnet_tf/1
 ```
 
-After that, you can run your model server on the newly generated `tf.saved_model` with
-tf serving binary.
-
+بعد ذلك، يمكنك تشغيل خادم النموذج على "tf.saved_model" الذي تم إنشاؤه حديثًا باستخدام ثنائي الخدمة tf.
 
 ```
 docker pull tensorflow/serving
@@ -85,14 +82,16 @@ docker run -p 8500:8500 \
 -e MODEL_NAME=resnet_tf -t tensorflow/serving &
 ```
 
-You can also use the `tf.serving` binary directly without docker. 
-For more details, please follow the [tf serving guide](https://www.tensorflow.org/tfx/serving/serving_basic).
+يمكنك أيضًا استخدام ثنائي "tf.serving" مباشرة دون الحاجة إلى Docker.
 
-# Common wrappers
+للحصول على مزيد من التفاصيل، يرجى اتباع [دليل الخدمة tf](https://www.tensorflow.org/tfx/serving/serving_basic).
 
-### I want to save directly tf.saved_model format without needing to run an separate command.
+# الأغطية الشائعة:
 
-You can accomplish this by using this helper function:
+### أريد حفظ تنسيق "tf.saved_model" مباشرةً دون الحاجة إلى تشغيل أمر منفصل.
+
+يمكنك تحقيق ذلك باستخدام دالة المساعدة هذه:
+
 ```python
 from torch_xla.tf_saved_model_integration import save_torch_module_as_tf_saved_model
 
@@ -103,7 +102,7 @@ save_torch_module_as_tf_saved_model(
 )
 ```
 
-### Other common wrappers
+### الأغطية الشائعة الأخرى:
 
 ```python
 def save_as_stablehlo(exported_model: 'ExportedProgram',
@@ -111,9 +110,9 @@ def save_as_stablehlo(exported_model: 'ExportedProgram',
                       options: Optional[StableHLOExportOptions] = None):
 ```
 
-`save_as_stablehlo` (also aliased as `torch_xla.save_as_stablehlo`) 
-takes ExportedProgram and saves StableHLO on disk. i.e.
-   same as exported_program_to_stablehlo(...).save(...)
+`save_as_stablehlo` (أيضًا مستعار باسم `torch_xla.save_as_stablehlo`)
+يأخذ ExportedProgram ويحفظ StableHLO على القرص. أي
+نفس exported_program_to_stablehlo(...).save(...)
 
 ```python
 def save_torch_model_as_stablehlo(
@@ -124,21 +123,20 @@ def save_torch_model_as_stablehlo(
   """Convert a torch model to a callable backed by StableHLO.
 
 ```
-takes `torch.nn.Module` and saves StableHLO on disk. i.e.
-   same as torch.export.export followed by save_as_stablehlo 
+يأخذ `torch.nn.Module` ويحفظ StableHLO على القرص. أي
+نفس export.export الشعلة تليها save_as_stablehlo
 
+# الملفات التي ينتجها `save_as_stablehlo`.
 
-# Files produced by `save_as_stablehlo`.
+داخل `/tmp/stablehlo_dir` في المثال أعلاه، ستجد 3 مجلدات: `data`، `constants`، `functions`. وسيحتوي كل من البيانات والثوابت على المصفوفات المستخدمة بواسطة البرنامج
+تم حفظه كـ `numpy.ndarray` باستخدام `numpy.save`.
 
-Inside of `/tmp/stablehlo_dir` in the example above, you will find 3 directories: `data`, `constants`, `functions`. Both data and constants will consist of tensors used by the program
-saved as `numpy.ndarray` using `numpy.save`.
+سيتضمن دليل الوظائف تعليمات StableHLO البرمجية، والتي تحمل هنا اسم `forward.bytecode`، ورمز StableHLO القابل للقراءة البشري (شكل MLIR) `forward.mlir`، وملف JSON يحدد الأوزان
+وإدخالات المستخدم الأصلية تصبح الحجج الموضعية لهذه الدالة StableHLO؛ وكذلك
+أنواع البيانات والأشكال لكل حجة.
 
-The functions directory will contain StableHLO bytecode, here named `forward.bytecode`, human readable StableHLO code (MLIR form) `forward.mlir`, and a JSON file specifying which weights 
-and original user's input become the which positional arguments of this StableHLO function; as well
-as the dtypes and shapes of every argument.
+مثال:
 
-
-Example:
 ```
 $ find /tmp/stablehlo_dir
 ./functions
@@ -159,20 +157,20 @@ $ find /tmp/stablehlo_dir
 ...
 ```
 
-The JSON file is serialized form of the `torch_xla.stablehlo.StableHLOFunc` class.
+ملف JSON هو الشكل التسلسلي لفئة `torch_xla.stablehlo.StableHLOFunc`.
 
-This format is currently also in prototype stage and there are no backward compatibility guarantees.
-The future plan is to standardize a format that the major frameworks (PyTorch, JAX, TensorFlow) can agree.
+هذا التنسيق هو أيضًا في مرحلة النموذج الأولي حاليًا ولا توجد ضمانات للتوافق مع الإصدارات السابقة.
+وتتمثل الخطة المستقبلية في توحيد تنسيق يمكن للإطارات الرئيسية (PyTorch وJAX وTensorFlow) الاتفاق عليه.
 
-# Preserving High-Level PyTorch Operations in StableHLO by generating `stablehlo.composite`
+# الحفاظ على عمليات PyTorch عالية المستوى في StableHLO عن طريق إنشاء `stablehlo.composite`
 
-High level PyTorch ops (e.g. `F.scaled_dot_product_attention`) will be decomposed into low level ops during PyTorch -> StableHLO lowering. Capturing the high level op in downstream ML compilers can be crucial for genearting a performant, efficient specialized kernels. While pattern matching a bunch of low level ops in the ML compiler can be challenging and error-prone, we offer a more robust method to outline the high-level PyTorch op in StableHLO program - by generating [stablehlo.composite](https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite) for the high level PyTorch ops.
+سيتم تحليل عمليات PyTorch عالية المستوى (مثل `F.scaled_dot_product_attention`) إلى عمليات منخفضة المستوى أثناء خفض مستوى PyTorch -> StableHLO. يمكن أن يكون التقاط العملية عالية المستوى في برامج التجميع ML أسفل البنية أمرًا بالغ الأهمية لإنشاء نوى متخصصة فعالة وفعالة. في حين أن مطابقة مجموعة من العمليات منخفضة المستوى في برنامج التجميع ML يمكن أن يكون أمرًا صعبًا وعرضة للأخطاء، فإننا نقدم طريقة أكثر متانة لتحديد موقع العملية عالية المستوى في برنامج StableHLO - عن طريق إنشاء [stablehlo.composite](https://github.com/openxla/stablehlo/blob/main/docs/spec.md#composite) لعمليات PyTorch عالية المستوى.
 
-With `StableHLOCompositeBuilder`, user can outline an arbitary region within the `forward` function of a `torch.nn.Module`. Then in the exported StableHLO program, a composite op for the outlined region will be produced.
+مع `StableHLOCompositeBuilder`، يمكن للمستخدم تحديد منطقة تعسفية داخل وظيفة `forward` لـ `torch.nn.Module`. بعد ذلك، في برنامج StableHLO الذي تم تصديره، سيتم إنتاج عملية مركبة للمنطقة المحددة.
 
-**NOTE:** Because the value of non-tensor inputs to the outlined region will be hardcoded in the exported graph, please store those values as composite attributes, if retrieving from the downstream compiler is desired.
+**ملاحظة:** نظرًا لأن قيمة الإدخالات غير المصفوفة للمنطقة المحددة ستكون ثابتة في الرسم البياني الذي تم تصديره، يرجى تخزين تلك القيم كسمات مركبة، إذا كان الاسترداد من برنامج التجميع أسفل البنية مطلوبًا.
 
-The following example shows a pratical use case - capturing `scaled_product_attention`
+يوضح المثال التالي حالة استخدام عملية - التقاط `scaled_product_attention`
 
 ```python
 import torch
@@ -211,7 +209,7 @@ stablehlo = stablehlo_gm.get_stablehlo_text()
 print(stablehlo)
 ```
 
-The main StableHLO graph is shown below:
+يتم عرض الرسم البياني StableHLO الرئيسي أدناه:
 
 ```mlir
 module @IrToHlo.56 attributes {mhlo.cross_program_prefetches = [], mhlo.input_output_alias = [], mhlo.is_dynamic = false, mhlo.use_auto_spmd_partitioning = false} {
@@ -229,13 +227,13 @@ module @IrToHlo.56 attributes {mhlo.cross_program_prefetches = [], mhlo.input_ou
   }
 ```
 
-The sdpa operation is encapsulated as a stablehlo composite call within the main graph. The name and attributes specified in the torch.nn.Module are propagated.
+يتم تغليف عملية sdpa كدعوة مركبة stablehlo داخل الرسم البياني الرئيسي. يتم نقل الاسم والسمات المحددة في وحدة "torch.nn"
 
 ```mlir
 %10 = stablehlo.composite "test.sdpa" %3, %6, %9 {composite_attributes = {other_attr = "val", scale = 2.500000e-01 : f32}, decomposition = @test.sdpa.impl}
 ```
 
-The reference PyTorch decomposition of the sdpa operation is captured in a StableHLO function:
+يتم التقاط تفكيك PyTorch المرجعي لعملية sdpa في وظيفة StableHLO:
 
 ```mlir
 func.func private @test.sdpa.impl(%arg0: tensor<10x8x128xf32>, %arg1: tensor<10x8x128xf32>, %arg2: tensor<10x8x128xf32>) -> tensor<10x8x128xf32> {
