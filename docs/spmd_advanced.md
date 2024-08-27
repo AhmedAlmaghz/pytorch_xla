@@ -1,9 +1,10 @@
-# PyTorch/XLA SPMD advanced topics
-In this doc we will cover some advance topic on GSPMD. Please read [SPMD user guide](https://github.com/pytorch/xla/blob/master/docs/spmd_basic.md) before procedding to this doc.
+# PyTorch/XLA SPMD المواضيع المتقدمة
 
-### Sharding-Aware Host-to-Device Data Loading
+في هذه الوثيقة، سنغطي بعض الموضوعات المتقدمة حول GSPMD. يرجى قراءة [دليل المستخدم SPMD](https://github.com/pytorch/xla/blob/master/docs/spmd_basic.md) قبل الانتقال إلى هذه الوثيقة.
 
-PyTorch/XLA SPMD takes a single-device program, shards and executes it in parallel. The SPMD execution requires using the native PyTorch DataLoader, which transfers data synchronously from the host to XLA devices. This blocks the training during the input data transfer every step. To improve the native data loading performance, we made PyTorch/XLA ParallelLoader support input sharding directly (src), when passed the optional kwarg _input\_sharding_:
+### تحميل البيانات من المضيف إلى الجهاز مع مراعاة التجزئة
+
+يأخذ PyTorch/XLA SPMD برنامجًا أحادي الجهاز، ويقسمه إلى أجزاء وينفذه بشكل متوازٍ. يتطلب التنفيذ SPMD استخدام PyTorch DataLoader الأصلي، والذي ينقل البيانات بشكل متزامن من المضيف إلى أجهزة XLA. وهذا يمنع التدريب أثناء نقل بيانات الإدخال في كل خطوة. لتحسين أداء تحميل البيانات الأصلي، جعلنا PyTorch/XLA ParallelLoader يدعم التجزئة المدخلة مباشرة (src)، عند تمرير وسيط kwarg الاختياري _input_sharding_:
 
 ```python
 # MpDeviceLoader returns ParallelLoader.per_device_loader as iterator
@@ -14,14 +15,13 @@ train_loader = pl.MpDeviceLoader(
          input_sharding=xs.ShardingSpec(input_mesh, ('data', None, None, None)))
 ```
 
-### Virtual Device Optimization
+### تحسين الجهاز الظاهري
 
-PyTorch/XLA normally transfers tensor data asynchronously from host to device once the tensor is defined. This is to overlap the data transfer with the graph tracing time. However, because GSPMD allows the user to modify the tensor sharding _after _the tensor has been defined, we need an optimization to prevent unnecessary transfer of tensor data back and forth between host and device. We introduce Virtual Device Optimization, a technique to place the tensor data on a virtual device SPMD:0 first, before uploading to the physical devices when all the sharding decisions are finalized. Every tensor data in SPMD mode is placed on a virtual device, SPMD:0. The virtual device is exposed to the user as an XLA device XLA:0 with the actual shards on physical devices, like TPU:0, TPU:1, etc.
+ينقل PyTorch/XLA عادة بيانات المصفوفة بشكل غير متزامر من المضيف إلى الجهاز بمجرد تحديد المصفوفة. وذلك لتداخل نقل البيانات مع وقت تتبع الرسم البياني. ومع ذلك، نظرًا لأن GSPMD يسمح للمستخدم بتعديل تجزئة المصفوفة بعد _تحديد المصفوفة، نحتاج إلى تحسين لمنع النقل غير الضروري لبيانات المصفوفة ذهابًا وإيابًا بين المضيف والجهاز. نقدم تحسين الجهاز الظاهري، وهي تقنية لوضع بيانات المصفوفة على جهاز ظاهري SPMD: 0 أولاً، قبل تحميلها إلى الأجهزة المادية عندما يتم الانتهاء من جميع قرارات التجزئة. يتم وضع كل بيانات المصفوفة في وضع SPMD على جهاز ظاهري، SPMD: 0. يتم عرض الجهاز الظاهري على المستخدم كجهاز XLA XLA: 0 مع الشرائح الفعلية على الأجهزة المادية، مثل TPU: 0، TPU: 1، وما إلى ذلك.
 
+## شبكة هجينة
 
-## Hybrid Mesh
-
-Mesh nicely abstracts how the physical device mesh is constructed. Users can arrange devices in any shape and order using the logical mesh. However, one can define a more performant mesh based on the physical topology, especially when it involves Data Center Network (DCN) cross slice connections. HybridMesh creates a mesh which gives good performance out of the box for such multislice environments. It accepts ici\_mesh\_shape and dcn\_mesh\_shape which denote logical mesh shapes of inner and outer network.
+تُجرِّد الشبكة بشكل جميل كيفية بناء شبكة الأجهزة المادية. يمكن للمستخدمين ترتيب الأجهزة بأي شكل وترتيب باستخدام الشبكة المنطقية. ومع ذلك، يمكنك تحديد شبكة أكثر كفاءة بناءً على الطوبولوجيا المادية، خاصة عند مشاركة اتصالات شريحة Data Center Network (DCN) عبرها. تُنشئ HybridMesh شبكة توفر أداءً جيدًا خارج الصندوق لمثل هذه البيئات متعددة الشرائح. فهو يقبل ici_mesh_shape وdcn_mesh_shape والتي تشير إلى أشكال شبكة منطقية للأجهزة المتصلة داخليًا وخارجيًا.
 
 ```python
 from torch_xla.distributed.spmd import HybridMesh
@@ -36,28 +36,29 @@ mesh = HybridMesh(ici_mesh_shape, dcn_mesh_shape, ('data','fsdp','tensor'))
 print(mesh.shape())
 >> OrderedDict([('data', 2), ('fsdp', 4), ('tensor', 1)])
 ```
-### Running SPMD on TPU Pod
 
-There is no code change required to go from single TPU host to TPU Pod if you construct your mesh and partition spec based on the number of devices instead of some hardcode constant. To run the PyTorch/XLA workload on TPU Pod, please refer to the [Pods section](https://github.com/pytorch/xla/blob/master/docs/pjrt.md#pods) of our PJRT guide.
+### تشغيل SPMD على TPU Pod
+
+لا يلزم إجراء أي تغيير في التعليمات البرمجية للانتقال من مضيف TPU واحد إلى TPU Pod إذا قمت ببناء شبكة المواصفات والتقسيم الخاصة بك بناءً على عدد الأجهزة بدلاً من بعض الثوابت المرمزة ثابتة. لتشغيل حمل عمل PyTorch/XLA على TPU Pod، يرجى الرجوع إلى قسم [Pods](https://github.com/pytorch/xla/blob/master/docs/pjrt.md#pods) في دليل PJRT.
 
 ### XLAShardedTensor
 
-`xs.mark_sharding` is a inplace op that will attach the sharding annotation to the input tensor, but it also return a `XLAShardedTensor` python object.
+`xs.mark_sharding` هي عملية في الموقع سترفق ملاحظة التجزئة بالمصفوفة المدخلة، ولكنها أيضًا تعيد كائن Python `XLAShardedTensor`.
 
-The main use case for `XLAShardedTensor` [[RFC](https://github.com/pytorch/xla/issues/3871)] is to annotate a native `torch.tensor` (on a single device) with a sharding spec. The annotation takes place immediately, but the actual sharding of the tensor is delayed as the computation is carried out lazily, except for the input tensors which are sharded without delay. Once a tensor is annotated and wrapped inside a `XLAShardedTensor`, it can be passed to existing PyTorch ops and `nn.Module` layers as `torch.Tensor`. This is important to ensure that the same PyTorch layers and tensor ops can be stacked together with `XLAShardedTensor`. This means that the user does not need to rewrite the existing ops and model codes for sharded computation. Namely, `XLAShardedTensor` will satisfy the following requirements:
+يتمثل الاستخدام الأساسي لـ `XLAShardedTensor` [[RFC](https://github.com/pytorch/xla/issues/3871)] في إضافة تعليق إلى `torch.tensor` الأصلي (على جهاز واحد) باستخدام مواصفات التجزئة. يحدث التعليق على الفور، ولكن التجزئة الفعلية للمصفوفة يتم تأخيرها حيث يتم تنفيذ الحساب بشكل كسول، باستثناء مصفوفات الإدخال التي تتم تجزئتها دون تأخير. بمجرد إضافة تعليق على المصفوفة وتغليفها داخل `XLAShardedTensor`، يمكن تمريرها إلى عمليات PyTorch و`nn.Module` الطبقات كما `torch.Tensor`. هذا أمر مهم لضمان إمكانية تكديس نفس طبقات PyTorch وعمليات المصفوفة مع `XLAShardedTensor`. وهذا يعني أن المستخدم لا يحتاج إلى إعادة كتابة العمليات ورمز النموذج الموجودة لحساب التجزئة. وبشكل أكثر تحديدًا، فإن `XLAShardedTensor` سيحقق المتطلبات التالية:
 
+* `XLAShardedTensor` هو فئة فرعية من `torch.Tensor` وتعمل مباشرة مع عمليات الشعلة الأصلية و`module.layers`. نحن نستخدم `__torch_dispatch__` لإرسال `XLAShardedTensor` إلى backend XLA. يقوم PyTorch/XLA باسترداد ملاحظات التجزئة المرفقة لتعقب الرسم البياني واستدعاء XLA SPMDPartitioner.
+* داخليًا، يتم دعم `XLAShardedTensor` (ومدخلها global_tensor) بواسطة `XLATensor` بهيكل بيانات خاص يحتفظ بالإشارات إلى بيانات الشرائح على الجهاز.
+* يمكن جمع المصفوفة المجزأة بعد التنفيذ الكسول وإعادتها إلى المضيف كمصفوفة global_tensor عند الطلب على المضيف (على سبيل المثال، طباعة قيمة المصفوفة العالمية).
+* يتم تحويل المقابض إلى الشرائح المحلية بشكل صارم بعد التنفيذ الكسول. تعرض `XLAShardedTensor` [local_shards](https://github.com/pytorch/xla/blob/4e8e5511555073ce8b6d1a436bf808c9333dcac6/torch_xla/distributed/spmd/xla_sharded_tensor.py#L117) لإرجاع الشرائح المحلية على الأجهزة القابلة للعنونة كـ <code>List[[XLAShard](https://github.com/pytorch/xla/blob/4e8e5511555073ce8b6d1a436bf808c9333dcac6/torch_xla/distributed/spmd/xla_sharded_tensor.py#L12)]</code>.
+هناك أيضًا جهد مستمر لدمج <code>XLAShardedTensor</code> في <code>DistributedTensor</code> API لدعم backend XLA [[RFC](https://github.com/pytorch/pytorch/issues/92909)].
 
+### تكامل DTensor
 
-*   `XLAShardedTensor` is a `torch.Tensor` subclass and works directly with native torch ops and `module.layers`. We use `__torch_dispatch__` to send `XLAShardedTensor` to the XLA backend. PyTorch/XLA retrieves attached sharding annotations to trace the graph and invokes XLA SPMDPartitioner.
-*   Internally, `XLAShardedTensor` (and its global\_tensor input) is backed by `XLATensor` with a special data structure holding references to the sharded device data.
-*   The sharded tensor after lazy execution may be gathered and materialized back to the host as global\_tensor when requested on the host (e.g., printing the value of the global tensor.
-*   The handles to the local shards are materialized strictly after the lazy execution. `XLAShardedTensor` exposes [local\_shards](https://github.com/pytorch/xla/blob/4e8e5511555073ce8b6d1a436bf808c9333dcac6/torch_xla/distributed/spmd/xla_sharded_tensor.py#L117) to return the local shards on addressable devices as <code>List[[XLAShard](https://github.com/pytorch/xla/blob/4e8e5511555073ce8b6d1a436bf808c9333dcac6/torch_xla/distributed/spmd/xla_sharded_tensor.py#L12)]</code>.
+أصدرت PyTorch نسخة تجريبية من [DTensor](https://github.com/pytorch/pytorch/blob/main/torch/distributed/_tensor/README.md) في 2.1.
 
-There is also an ongoing effort to integrate <code>XLAShardedTensor</code> into <code>DistributedTensor</code> API to support XLA backend [[RFC](https://github.com/pytorch/pytorch/issues/92909)].
+نحن نقوم بتكامل PyTorch/XLA SPMD في DTensor API [RFC](https://github.com/pytorch/pytorch/issues/92909). لدينا تكامل مفهومي للدليل لـ `distribute_tensor`، والذي يستدعي واجهة برمجة التطبيقات للتعليق `mark_sharding` لتجزئة المصفوفة وحسابها باستخدام XLA:
 
-### DTensor Integration
-PyTorch has prototype-released [DTensor](https://github.com/pytorch/pytorch/blob/main/torch/distributed/_tensor/README.md) in 2.1.
-We are integrating PyTorch/XLA SPMD into DTensor API [RFC](https://github.com/pytorch/pytorch/issues/92909). We have a proof-of-concept integration for `distribute_tensor`, which calls `mark_sharding` annotation API to shard a tensor and its computation using XLA:
 ```python
 import torch
 from torch.distributed import DeviceMesh, Shard, distribute_tensor
@@ -68,11 +69,12 @@ big_tensor = torch.randn(100000, 88)
 my_dtensor = distribute_tensor(big_tensor, mesh, [Shard(0)])
 ```
 
-This feature is experimental and stay tuned for more updates, examples and tutorials in the upcoming releases.
+هذه الميزة تجريبية، لذا يرجى الانتظار للحصول على تحديثات ومزيد من الأمثلة والبرامج التعليمية في الإصدارات القادمة.
 
-### Activation Sharding for torch.compile
+### تجزئة التنشيط لـ torch.compile
 
-In the 2.3 release, PyTorch/XLA added the custom op `dynamo_mark_sharding` which can be used to perform the activation sharding in a `torch.compile` region. This is part of our ongoing effort to make `torch.compile` + `GSPMD` to be the recommended way of doing the model inference using PyTorch/XLA. Example of using this custom op:
+في الإصدار 2.3، أضافت PyTorch/XLA عملية مخصصة `dynamo_mark_sharding` والتي يمكن استخدامها لأداء تجزئة التنشيط في منطقة `torch.compile`. هذا جزء من جهودنا المستمرة لجعل `torch.compile` + `GSPMD` الطريقة الموصى بها لأداء استدلال النموذج باستخدام PyTorch/XLA. مثال على استخدام هذه العملية المخصصة:
+
 ```
 # Activation output sharding
 device_ids = [i for i in range(self.num_devices)] # List[int]
@@ -82,10 +84,11 @@ partition_spec = "('data', 'model')" # string version of partition spec
 torch.ops.xla.dynamo_mark_sharding(output, device_ids, mesh_shape, axis_names, partition_spec)
 ```
 
-### SPMD Debugging Tool
+### أداة تصحيح SPMD
 
-We provide a `shard placement visualization debug tool` for PyTorch/XLA SPMD user on TPU/GPU/CPU with single-host/multi-host: you could use `visualize_tensor_sharding` to visualize sharded tensor, or you could use `visualize_sharding` to visualize sharing string. Here are two code examples on TPU single-host(v4-8) with `visualize_tensor_sharding` or `visualize_sharding`:
-- Code snippet used `visualize_tensor_sharding` and visualization result:
+نوفر أداة `تصور موضع الشريحة` لمستخدم PyTorch/XLA SPMD على TPU/GPU/CPU مع single-host/multi-host: يمكنك استخدام `visualize_tensor_sharding` لتصور المصفوفة المجزأة، أو يمكنك استخدام `visualize_sharding` لتصور سلسلة التجزئة. فيما يلي مثالان للرمز على TPU single-host(v4-8) مع `visualize_tensor_sharding` أو `visualize_sharding`:
+
+- مقتطف الشفرة المستخدمة `visualize_tensor_sharding` ونتيجة التصور:
 
 ```python
 import rich
@@ -98,37 +101,42 @@ xs.mark_sharding(t, mesh, ('x', 'y'))
 from torch_xla.distributed.spmd.debugging import visualize_tensor_sharding
 generated_table = visualize_tensor_sharding(t, use_color=False)
 ```
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="_static/img/spmd_debug_1.png">
-  <img alt="visualize_tensor_sharding example on TPU v4-8(single-host)" src="_static/img/spmd_debug_1_light.png">
+<source media="(prefers-color-scheme: dark)" srcset="_static/img/spmd_debug_1.png">
+<img alt="visualize_tensor_sharding example on TPU v4-8(single-host)" src="_static/img/spmd_debug_1_light.png">
 </picture>
 
-- Code snippet used `visualize_sharding` and visualization result:
+- مقتطف الشفرة المستخدمة `visualize_sharding` ونتيجة التصور:
 
 ```python
 from torch_xla.distributed.spmd.debugging import visualize_sharding
 sharding = '{devices=[2,2]0,1,2,3}'
 generated_table = visualize_sharding(sharding, use_color=False)
 ```
+
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="_static/img/spmd_debug_2.png">
-  <img alt="visualize_sharding example on TPU v4-8(single-host)" src="_static/img/spmd_debug_2_light.png">
+<source media="(prefers-color-scheme: dark)" srcset="_static/img/spmd_debug_2.png">
+<img alt="visualize_sharding example on TPU v4-8(single-host)" src="_static/img/spmd_debug_2_light.png">
 </picture>
 
-You could use these examples on TPU/GPU/CPU single-host and modify it to run on multi-host. And you could modify it to sharding-style `tiled`, `partial_replication` and `replicated`.
+يمكنك استخدام هذه الأمثلة على TPU/GPU/CPU single-host وتعديلها لتشغيلها على multi-host. ويمكنك تعديلها لأسلوب التجزئة `tiled`، و`partial_replication`، و`replicated`.
 
-### Auto-Sharding
-We are introducing a new PyTorch/XLA SPMD feature, called ``auto-sharding``, [RFC](https://github.com/pytorch/xla/issues/6322). This is an experimental feature in `r2.3` and `nightly`, that supports `XLA:TPU` and a single TPUVM host.
+### التجزئة التلقائية
 
-PyTorch/XLA auto-sharding can be enabled by one of the following:
-- Setting envvar `XLA_AUTO_SPMD=1`
-- Calling the SPMD API in the beginning of your code:
+نقدم ميزة جديدة لـ PyTorch/XLA SPMD، تسمى "التجزئة التلقائية"، [RFC](https://github.com/pytorch/xla/issues/6322). هذه ميزة تجريبية في `r2.3` و`nightly`، والتي تدعم `XLA:TPU` ومضيف TPUVM واحد.
+
+يمكن تمكين التجزئة التلقائية لـ PyTorch/XLA بإحدى الطرق التالية:
+
+- قم بتعيين متغير البيئة `XLA_AUTO_SPMD=1`
+- استدعاء واجهة برمجة تطبيقات SPMD في بداية التعليمات البرمجية الخاصة بك:
 
 ```python
 import torch_xla.runtime as xr
 xr.use_spmd(auto=True)
 ```
-- Calling `pytorch.distributed._tensor.distribute_module` with `auto-policy` and `xla`:
+
+- استدعاء `pytorch.distributed._tensor.distribute_module` مع `auto-policy` و`xla`:
 
 ```python
 import torch_xla.runtime as xr
@@ -143,10 +151,10 @@ model = MyModule()  # nn.module
 sharded_model = distribute_module(model, device_mesh, auto_policy)
 ```
 
-Optionally, one can set the following options/env-vars to control the behvaior of
-the XLA-based auto-sharding pass:
-- `XLA_AUTO_USE_GROUP_SHARDING`: group resharding of the parameters. Set by default.
-- `XLA_AUTO_SPMD_MESH`: logical mesh shape to be used for auto-sharding. For example,
-`XLA_AUTO_SPMD_MESH=2,2` corresponds to a 2-by-2 mesh with 4 global devices. If unset,
-a default device mesh shape of `num_devices,1` will be used.
+اختياريًا، يمكنك تعيين الخيارات/متغيرات البيئة التالية للتحكم في سلوك
+تمرير التجزئة التلقائي القائم على XLA:
 
+- `XLA_AUTO_USE_GROUP_SHARDING`: تجزئة إعادة تجميع المعلمات. تم الإعداد بشكل افتراضي.
+- `XLA_AUTO_SPMD_MESH`: شكل شبكة منطقية لاستخدامها للتجزئة التلقائية. على سبيل المثال،
+`XLA_AUTO_SPMD_MESH=2,2` يقابل شبكة 2x2 مع 4 أجهزة عالمية. إذا لم يتم تعيينه،
+سيتم استخدام شكل شبكة جهاز افتراضي `num_devices,1`.
