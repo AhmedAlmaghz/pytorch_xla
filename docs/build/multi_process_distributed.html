@@ -1,0 +1,1107 @@
+
+
+
+<!DOCTYPE html>
+<!--[if IE 8]><html class="no-js lt-ie9" lang="en" > <![endif]-->
+<!--[if gt IE 8]><!--> <html class="no-js" lang="en" > <!--<![endif]-->
+<head>
+  <meta charset="utf-8">
+  
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <title>كيفية تنفيذ DistributedDataParallel (DDP) &mdash; PyTorch/XLA master documentation</title>
+  
+
+  
+  
+  
+  
+
+  
+
+  
+  
+    
+
+  
+
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+  <!-- <link rel="stylesheet" href="_static/pygments.css" type="text/css" /> -->
+  <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+  <link rel="stylesheet" href="_static/css/theme.css" type="text/css" />
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="عمليات كمية لأجهزة XLA (ميزة تجريبية)" href="quantized_ops.html" />
+    <link rel="prev" title="كيفية التشغيل باستخدام PyTorch/XLA:GPU" href="gpu.html" />
+  <!-- Google Tag Manager -->
+    <script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
+    new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
+    j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
+    'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
+    })(window,document,'script','dataLayer','');</script>
+    <!-- End Google Tag Manager -->
+  
+
+  
+  <script src="_static/js/modernizr.min.js"></script>
+
+  <!-- Preload the theme fonts -->
+
+<link rel="preload" href="_static/fonts/FreightSans/freight-sans-book.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="_static/fonts/FreightSans/freight-sans-medium.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="_static/fonts/IBMPlexMono/IBMPlexMono-Medium.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="_static/fonts/FreightSans/freight-sans-bold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="_static/fonts/FreightSans/freight-sans-medium-italic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="_static/fonts/IBMPlexMono/IBMPlexMono-SemiBold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+
+<!-- Preload the katex fonts -->
+
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Math-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Main-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Main-Bold.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Size1-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Size4-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Size2-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Size3-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+<link rel="preload" href="https://cdn.jsdelivr.net/npm/katex@0.10.0/dist/fonts/KaTeX_Caligraphic-Regular.woff2" as="font" type="font/woff2" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.15.2/css/all.css" integrity="sha384-vSIIfh2YWi9wW0r9iZe7RJPrKwp6bG+s9QZMoITbCckVJqGCCRhc+ccxNcdpHuYu" crossorigin="anonymous">
+</head>
+
+<div class="container-fluid header-holder tutorials-header" id="header-holder">
+  <div class="container">
+    <div class="header-container">
+      <a class="header-logo" href="https://pytorch.org/" aria-label="PyTorch"></a>
+
+      <div class="main-menu">
+        <ul>
+
+          <li class="main-menu-item">
+          <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                Learn
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/get-started">
+                  <span class=dropdown-title>Get Started</span>
+                  <p>Run PyTorch locally or get started quickly with one of the supported cloud platforms</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/tutorials">
+                  <span class="dropdown-title">Tutorials</span>
+                  <p>Whats new in PyTorch tutorials</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/tutorials/beginner/basics/intro.html">
+                  <span class="dropdown-title">Learn the Basics</span>
+                  <p>Familiarize yourself with PyTorch concepts and modules</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/tutorials/recipes/recipes_index.html">
+                  <span class="dropdown-title">PyTorch Recipes</span>
+                  <p>Bite-size, ready-to-deploy PyTorch code examples</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/tutorials/beginner/introyt.html">
+                  <span class="dropdown-title">Intro to PyTorch - YouTube Series</span>
+                  <p>Master PyTorch basics with our engaging YouTube tutorial series</p>
+                </a>
+              </div>
+            </div>
+          </li>
+
+          <li>
+          <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                Ecosystem
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/ecosystem">
+                  <span class="dropdown-title">Tools</span>
+                  <p>Learn about the tools and frameworks in the PyTorch Ecosystem</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/#community-module">
+                  <span class=dropdown-title>Community</span>
+                  <p>Join the PyTorch developer community to contribute, learn, and get your questions answered</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://discuss.pytorch.org/" target="_blank">
+                  <span class=dropdown-title>Forums</span>
+                  <p>A place to discuss PyTorch code, issues, install, research</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/resources">
+                  <span class=dropdown-title>Developer Resources</span>
+                  <p>Find resources and get questions answered</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/ecosystem/contributor-awards-2023">
+                  <span class="dropdown-title">Contributor Awards - 2023</span>
+                  <p>Award winners announced at this year's PyTorch Conference</p>
+                </a>
+              </div>
+            </div>
+          </li>
+
+          <li>
+          <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                Edge
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/edge">
+                  <span class="dropdown-title">About PyTorch Edge</span>
+                  <p>Build innovative and privacy-aware AI experiences for edge devices</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/executorch-overview">
+                  <span class="dropdown-title">ExecuTorch</span>
+                  <p>End-to-end solution for enabling on-device inference capabilities across mobile and edge devices</p>
+                </a>
+              </div>
+            </div>  
+          </li>
+
+          <li class="main-menu-item">
+            <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                Docs
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/docs/stable/index.html">
+                  <span class="dropdown-title">PyTorch</span>
+                  <p>Explore the documentation for comprehensive guidance on how to use PyTorch</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/pytorch-domains">
+                  <span class="dropdown-title">PyTorch Domains</span>
+                  <p>Read the PyTorch Domains documentation to learn more about domain-specific libraries</p>
+                </a>
+              </div>
+            </div>
+          </li>
+
+          <li>
+            <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                Blogs & News 
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/blog/">
+                  <span class="dropdown-title">PyTorch Blog</span>
+                  <p>Catch up on the latest technical news and happenings</p>
+                </a>
+                 <a class="nav-dropdown-item" href="https://pytorch.org/community-blog">
+                  <span class="dropdown-title">Community Blog</span>
+                  <p>Stories from the PyTorch ecosystem</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/videos">
+                  <span class="dropdown-title">Videos</span>
+                  <p>Learn about the latest PyTorch tutorials, new, and more </p>
+                <a class="nav-dropdown-item" href="https://pytorch.org/community-stories">
+                  <span class="dropdown-title">Community Stories</span>
+                  <p>Learn how our community solves real, everyday machine learning problems with PyTorch</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/events">
+                  <span class="dropdown-title">Events</span>
+                  <p>Find events, webinars, and podcasts</p>
+                </a>
+            </div>
+          </li>
+
+          <li>
+            <div id="resourcesDropdownButton" data-toggle="resources-dropdown" class="resources-dropdown">
+              <a class="with-down-arrow">
+                About
+              </a>
+              <div class="resources-dropdown-menu">
+                <a class="nav-dropdown-item" href="https://pytorch.org/foundation">
+                  <span class="dropdown-title">PyTorch Foundation</span>
+                  <p>Learn more about the PyTorch Foundation</p>
+                </a>
+                <a class="nav-dropdown-item" href="https://pytorch.org/governing-board">
+                  <span class="dropdown-title">Governing Board</span>
+                  <p></p>
+                </a>
+              </div>
+            </div>
+          </li>
+
+          <li class="main-menu-item">
+            <div class="no-dropdown">
+              <a href="https://pytorch.org/join" data-cta="join">
+                Become a Member
+              </a>
+            </div>
+          </li>
+          <li>
+           <div class="main-menu-item">
+             <a href="https://github.com/pytorch/pytorch" class="github-icon">
+             </a>
+           </div>
+          </li>
+          <!--- TODO: This block adds the search icon to the nav bar. We will enable it later. 
+          <li>
+            <div class="main-menu-item">
+             <a href="https://github.com/pytorch/pytorch" class="search-icon">
+             </a>
+            </div>
+          </li>
+          --->
+        </ul>
+      </div>
+
+      <a class="main-menu-open-button" href="#" data-behavior="open-mobile-menu"></a>
+    </div>
+  </div>
+</div>
+
+<body class="pytorch-body">
+
+   
+
+    
+
+    <div class="table-of-contents-link-wrapper">
+      <span>Table of Contents</span>
+      <a href="#" class="toggle-table-of-contents" data-behavior="toggle-table-of-contents"></a>
+    </div>
+
+    <nav data-toggle="wy-nav-shift" class="pytorch-left-menu" id="pytorch-left-menu">
+      <div class="pytorch-side-scroll">
+        <div class="pytorch-menu pytorch-menu-vertical" data-spy="affix" role="navigation" aria-label="main navigation">
+          <div class="pytorch-left-menu-search">
+            
+
+            
+              
+              
+                <div class="version">
+                  master (2.4.0 )
+                </div>
+              
+            
+
+            
+
+
+  
+
+
+<div role="search">
+  <form id="rtd-search-form" class="wy-form" action="search.html" method="get">
+    <input type="text" name="q" placeholder="Search Docs" />
+    <input type="hidden" name="check_keywords" value="yes" />
+    <input type="hidden" name="area" value="default" />
+  </form>
+</div>
+
+            
+          </div>
+
+          
+            
+            
+              
+            
+            
+              <ul>
+<li class="toctree-l1"><a class="reference internal" href="index.html">وثائق PyTorch/XLA</a></li>
+</ul>
+<p class="caption" role="heading"><span class="caption-text">الوثائق</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="debug.html">Troubleshooting</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eager_mode.html">وضع Eager + واجهة برمجة تطبيقات Compile</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eager_mode.html#id1">الخلفية</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eager_mode.html#id2">الاستخدام الأساسي</a></li>
+<li class="toctree-l1"><a class="reference internal" href="eager_mode.html#id5">المعيار المرجعي</a></li>
+<li class="toctree-l1"><a class="reference internal" href="gpu.html">كيفية التشغيل باستخدام PyTorch/XLA:GPU</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">كيفية تنفيذ DistributedDataParallel (DDP)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="quantized_ops.html">عمليات كمية لأجهزة XLA (ميزة تجريبية)</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html">وقت تشغيل PJRT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#pytorch-xla-r2-1">الميزات الجديدة في PyTorch/XLA r2.1:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#pytorch-xla-r2-0">الميزات الجديدة في PyTorch/XLA r2.0:</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id2">خلاصة القول</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id4">الفوائد</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id5">البدء السريع</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id11">الاختلافات عن XRT</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#pjrt-torch-distributed">PJRT و torch.distributed</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id14">الأداء</a></li>
+<li class="toctree-l1"><a class="reference internal" href="runtime.html#id15">وقت تشغيل TPU الجديد</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spmd.html">PyTorch/XLA SPMD الدليل الإرشادي للمستخدم</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spmd.html#fully-sharded-data-parallel-fsdp-spmd">Fully Sharded Data Parallel(FSDP) عبر SPMD</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spmd.html#id17">PyTorch/XLA SPMD المواضيع المتقدمة</a></li>
+<li class="toctree-l1"><a class="reference internal" href="spmd.html#id26">الحفظ الموزع للإشارات المرجعية</a></li>
+<li class="toctree-l1"><a class="reference internal" href="torch_compile.html">تكامل TorchDynamo (torch.compile) في PyTorch XLA</a></li>
+</ul>
+
+            
+          
+        </div>
+      </div>
+    </nav>
+
+    <div class="pytorch-container">
+      <div class="pytorch-page-level-bar" id="pytorch-page-level-bar">
+        <div class="pytorch-breadcrumbs-wrapper">
+          
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div role="navigation" aria-label="breadcrumbs navigation">
+
+  <ul class="pytorch-breadcrumbs">
+    
+      <li>
+        <a href="index.html">
+          
+            Docs
+          
+        </a> &gt;
+      </li>
+
+        
+      <li>كيفية تنفيذ DistributedDataParallel (DDP)</li>
+    
+    
+      <li class="pytorch-breadcrumbs-aside">
+        
+            
+            <a href="_sources/multi_process_distributed.rst.txt" rel="nofollow"><img src="_static/images/view-page-source-icon.svg"></a>
+          
+        
+      </li>
+    
+  </ul>
+
+  
+</div>
+        </div>
+
+        <div class="pytorch-shortcuts-wrapper" id="pytorch-shortcuts-wrapper">
+          Shortcuts
+        </div>
+      </div>
+
+      <section data-toggle="wy-nav-shift" id="pytorch-content-wrap" class="pytorch-content-wrap">
+        <div class="pytorch-content-left">
+
+        
+          <!-- Google Tag Manager (noscript) -->
+          <noscript><iframe src="https://www.googletagmanager.com/ns.html?id="
+          height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
+          <!-- End Google Tag Manager (noscript) -->
+          
+          <div class="rst-content">
+          
+            <div role="main" class="main-content" itemscope="itemscope" itemtype="http://schema.org/Article">
+             <article itemprop="articleBody" id="pytorch-article" class="pytorch-article">
+              
+  <div class="section" id="distributeddataparallel-ddp">
+<h1>كيفية تنفيذ DistributedDataParallel (DDP)<a class="headerlink" href="#distributeddataparallel-ddp" title="Permalink to this heading">¶</a></h1>
+<p>توضح هذه الوثيقة كيفية استخدام torch.nn.parallel.DistributedDataParallel في xla، كما تصف الاختلاف بينها وبين نهج xla الأصلي للتوازي في البيانات. يمكنك العثور على مثال قابل للتنفيذ الأدنى <a class="reference external" href="https://github.com/pytorch/xla/blob/master/examples/data_parallel/train_resnet_ddp.py">هنا</a>.</p>
+<div class="section" id="id2">
+<h2>الخلفية / الدافع<a class="headerlink" href="#id2" title="Permalink to this heading">¶</a></h2>
+<p>لطالما طلب العملاء القدرة على استخدام واجهة برمجة تطبيقات DistributedDataParallel من PyTorch مع xla. وهنا نقوم بتمكينها كميزة تجريبية.</p>
+</div>
+<div class="section" id="distributeddataparallel">
+<h2>كيفية استخدام DistributedDataParallel<a class="headerlink" href="#distributeddataparallel" title="Permalink to this heading">¶</a></h2>
+<p>بالنسبة لأولئك الذين انتقلوا من وضع PyTorch Eager إلى XLA، فيما يلي جميع التغييرات التي تحتاج إلى إجرائها لتحويل نموذج DDP Eager إلى نموذج XLA. نفترض أنك تعرف بالفعل كيفية استخدام XLA <a class="reference external" href="../API_GUIDE.md#running-on-a-single-xla-device">على جهاز واحد</a>.</p>
+<ol class="arabic simple">
+<li><p>استيراد الحزم الموزعة المحددة لـ xla:</p></li>
+</ol>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">torch_xla</span>
+<span class="kn">import</span> <span class="nn">torch_xla.runtime</span> <span class="k">as</span> <span class="nn">xr</span>
+<span class="kn">import</span> <span class="nn">torch_xla.distributed.xla_backend</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p>قم بتهيئة مجموعة العمليات xla على غرار مجموعات العمليات الأخرى مثل nccl و gloo.</p></li>
+</ol>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="n">dist</span><span class="o">.</span><span class="n">init_process_group</span><span class="p">(</span><span class="s2">&quot;xla&quot;</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="n">rank</span><span class="p">,</span> <span class="n">world_size</span><span class="o">=</span><span class="n">world_size</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p>استخدم واجهات برمجة التطبيقات المحددة لـ xla للحصول على الرتبة وحجم العالم إذا كنت بحاجة إلى ذلك.</p></li>
+</ol>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="n">new_rank</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">global_ordinal</span><span class="p">()</span>
+<span class="n">world_size</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">world_size</span><span class="p">()</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p>قم بتمرير <code class="docutils literal notranslate"><span class="pre">gradient_as_bucket_view=True</span></code> إلى غلاف DDP.</p></li>
+</ol>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="n">ddp_model</span> <span class="o">=</span> <span class="n">DDP</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">gradient_as_bucket_view</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<ol class="arabic simple">
+<li><p>أخيرًا، قم بتشغيل نموذجك باستخدام برنامج الإطلاق المحدد لـ xla.</p></li>
+</ol>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="n">torch_xla</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">demo_fn</span><span class="p">)</span>
+</pre></div>
+</div>
+<p>هنا قمنا بوضع كل شيء معًا (المثال مأخوذ بالفعل من <a class="reference external" href="https://pytorch.org/tutorials/intermediate/ddp_tutorial.html">دليل DDP</a>). الطريقة التي تقوم بها بالترميز تشبه إلى حد كبير تجربة Eager. فقط مع لمسات xla المحددة على جهاز واحد بالإضافة إلى التغييرات الخمسة أعلاه إلى نصك البرمجي.</p>
+<div class="highlight-py notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">sys</span>
+<span class="kn">import</span> <span class="nn">tempfile</span>
+<span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch.distributed</span> <span class="k">as</span> <span class="nn">dist</span>
+<span class="kn">import</span> <span class="nn">torch.nn</span> <span class="k">as</span> <span class="nn">nn</span>
+<span class="kn">import</span> <span class="nn">torch.optim</span> <span class="k">as</span> <span class="nn">optim</span>
+
+<span class="kn">from</span> <span class="nn">torch.nn.parallel</span> <span class="kn">import</span> <span class="n">DistributedDataParallel</span> <span class="k">as</span> <span class="n">DDP</span>
+
+<span class="c1"># additional imports for xla</span>
+<span class="kn">import</span> <span class="nn">torch_xla</span>
+<span class="kn">import</span> <span class="nn">torch_xla.core.xla_model</span> <span class="k">as</span> <span class="nn">xm</span>
+<span class="kn">import</span> <span class="nn">torch_xla.runtime</span> <span class="k">as</span> <span class="nn">xr</span>
+<span class="kn">import</span> <span class="nn">torch_xla.distributed.xla_backend</span>
+
+<span class="k">def</span> <span class="nf">setup</span><span class="p">(</span><span class="n">rank</span><span class="p">,</span> <span class="n">world_size</span><span class="p">):</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;MASTER_ADDR&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;localhost&#39;</span>
+    <span class="n">os</span><span class="o">.</span><span class="n">environ</span><span class="p">[</span><span class="s1">&#39;MASTER_PORT&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="s1">&#39;12355&#39;</span>
+
+    <span class="c1"># initialize the xla process group</span>
+    <span class="n">dist</span><span class="o">.</span><span class="n">init_process_group</span><span class="p">(</span><span class="s2">&quot;xla&quot;</span><span class="p">,</span> <span class="n">rank</span><span class="o">=</span><span class="n">rank</span><span class="p">,</span> <span class="n">world_size</span><span class="o">=</span><span class="n">world_size</span><span class="p">)</span>
+
+<span class="k">def</span> <span class="nf">cleanup</span><span class="p">():</span>
+    <span class="n">dist</span><span class="o">.</span><span class="n">destroy_process_group</span><span class="p">()</span>
+
+<span class="k">class</span> <span class="nc">ToyModel</span><span class="p">(</span><span class="n">nn</span><span class="o">.</span><span class="n">Module</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">(</span><span class="n">ToyModel</span><span class="p">,</span> <span class="bp">self</span><span class="p">)</span><span class="o">.</span><span class="fm">__init__</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">net1</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">10</span><span class="p">,</span> <span class="mi">1000000</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">relu</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">ReLU</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">net2</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">Linear</span><span class="p">(</span><span class="mi">1000000</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">forward</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">x</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">net2</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">relu</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">net1</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span>
+
+<span class="k">def</span> <span class="nf">demo_basic</span><span class="p">(</span><span class="n">rank</span><span class="p">):</span>
+    <span class="c1"># xla specific APIs to get rank, world_size.</span>
+    <span class="n">new_rank</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">global_ordinal</span><span class="p">()</span>
+    <span class="k">assert</span> <span class="n">new_rank</span> <span class="o">==</span> <span class="n">rank</span>
+    <span class="n">world_size</span> <span class="o">=</span> <span class="n">xr</span><span class="o">.</span><span class="n">world_size</span><span class="p">()</span>
+
+    <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Running basic DDP example on rank </span><span class="si">{</span><span class="n">rank</span><span class="si">}</span><span class="s2">.&quot;</span><span class="p">)</span>
+    <span class="n">setup</span><span class="p">(</span><span class="n">rank</span><span class="p">,</span> <span class="n">world_size</span><span class="p">)</span>
+
+    <span class="c1"># create model and move it to XLA device</span>
+    <span class="n">device</span> <span class="o">=</span> <span class="n">xm</span><span class="o">.</span><span class="n">xla_device</span><span class="p">()</span>
+    <span class="n">model</span> <span class="o">=</span> <span class="n">ToyModel</span><span class="p">()</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="c1"># currently, graident_as_bucket_view is needed to make DDP work for xla</span>
+    <span class="n">ddp_model</span> <span class="o">=</span> <span class="n">DDP</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">gradient_as_bucket_view</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+
+    <span class="n">loss_fn</span> <span class="o">=</span> <span class="n">nn</span><span class="o">.</span><span class="n">MSELoss</span><span class="p">()</span>
+    <span class="n">optimizer</span> <span class="o">=</span> <span class="n">optim</span><span class="o">.</span><span class="n">SGD</span><span class="p">(</span><span class="n">ddp_model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.001</span><span class="p">)</span>
+
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">zero_grad</span><span class="p">()</span>
+    <span class="n">outputs</span> <span class="o">=</span> <span class="n">ddp_model</span><span class="p">(</span><span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">10</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">))</span>
+    <span class="n">labels</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">randn</span><span class="p">(</span><span class="mi">20</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="p">)</span>
+    <span class="n">loss_fn</span><span class="p">(</span><span class="n">outputs</span><span class="p">,</span> <span class="n">labels</span><span class="p">)</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+    <span class="n">optimizer</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+    <span class="c1"># xla specific API to execute the graph</span>
+    <span class="n">xm</span><span class="o">.</span><span class="n">mark_step</span><span class="p">()</span>
+
+    <span class="n">cleanup</span><span class="p">()</span>
+
+
+<span class="k">def</span> <span class="nf">run_demo</span><span class="p">(</span><span class="n">demo_fn</span><span class="p">):</span>
+    <span class="c1"># xla specific launcher</span>
+    <span class="n">torch_xla</span><span class="o">.</span><span class="n">launch</span><span class="p">(</span><span class="n">demo_fn</span><span class="p">)</span>
+
+<span class="k">if</span> <span class="vm">__name__</span> <span class="o">==</span> <span class="s2">&quot;__main__&quot;</span><span class="p">:</span>
+    <span class="n">run_demo</span><span class="p">(</span><span class="n">demo_basic</span><span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="id4">
+<h2>المعايرة<a class="headerlink" href="#id4" title="Permalink to this heading">¶</a></h2>
+<div class="section" id="resnet50">
+<h3>Resnet50 ببيانات وهمية<a class="headerlink" href="#resnet50" title="Permalink to this heading">¶</a></h3>
+<p>تم جمع النتائج التالية باستخدام الأمر: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">test/test_train_mp_imagenet.py</span> <span class="pre">--fake_data</span> <span class="pre">--model=resnet50</span> <span class="pre">--num_epochs=1</span></code> في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT. وتم إنتاج المقاييس الإحصائية باستخدام النص البرمجي الموجود في هذا <a class="reference external" href="https://github.com/pytorch/xla/pull/4107">طلب السحب</a>. الوحدة لمعدل هي الصور في الثانية.</p>
+<table>
+<tr>
+<td>النوع
+</td>
+<td>يعني
+</td>
+<td>وسيط
+</td>
+<td>90%
+</td>
+<td>انحراف معياري
+</td>
+<td>السيرة الذاتية
+</td>
+</tr>
+<tr>
+<td>xm.optimizer_step
+</td>
+<td>418.54
+</td>
+<td>419.22
+</td>
+<td>430.40
+</td>
+<td>9.76
+</td>
+<td>0.02
+</td>
+</tr>
+<tr>
+<td>DDP
+</td>
+<td>395.97
+</td>
+<td>395.54
+</td>
+<td>407.13
+</td>
+<td>7.60
+</td>
+<td>0.02
+</td>
+</tr>
+</table><p>يبلغ الفرق في الأداء بين نهجنا الأصلي للتوازي في البيانات الموزعة وغلاف DistributedDataParallel هو: 1 - 395.97 / 418.54 = 5.39%. يبدو أن هذه النتيجة معقولة نظرًا لأن غلاف DDP يتسبب في حدوث تكاليف إضافية عند تتبع وقت تشغيل DDP.</p>
+</div>
+<div class="section" id="mnist">
+<h3>MNIST ببيانات وهمية<a class="headerlink" href="#mnist" title="Permalink to this heading">¶</a></h3>
+<p>تم جمع النتائج التالية باستخدام الأمر: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">test/test_train_mp_mnist.py</span> <span class="pre">--fake_data</span></code> في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT. وتم إنتاج المقاييس الإحصائية باستخدام النص البرمجي الموجود في هذا <a class="reference external" href="https://github.com/pytorch/xla/pull/4107">طلب السحب</a>. الوحدة لمعدل هي الصور في الثانية.</p>
+<table>
+<tr>
+<td>النوع
+</td>
+<td>يعني
+</td>
+<td>وسيط
+</td>
+<td>90%
+</td>
+<td>انحراف معياري
+</td>
+<td>السيرة الذاتية
+</td>
+</tr>
+<tr>
+<td>xm.optimizer_step
+</td>
+<td>17864.19
+</td>
+<td>20108.96
+</td>
+<td>24351.74
+</td>
+<td>5866.83
+</td>
+<td>0.33
+</td>
+</tr>
+<tr>
+<td>DDP
+</td>
+<td>10701.39
+</td>
+<td>11770.00
+</td>
+<td>14313.78
+</td>
+<td>3102.92
+</td>
+<td>0.29
+</td>
+</tr>
+</table><p>يبلغ الفرق في الأداء بين نهجنا الأصلي للتوازي في البيانات الموزعة وغلاف DistributedDataParallel هو: 1 - 14313.78 / 24351.74 = 41.22%. نقارن هنا 90% بدلاً من ذلك نظرًا لأن مجموعة البيانات صغيرة وتتأثر الجولات القليلة الأولى بشدة بتحميل البيانات. هذا التباطؤ كبير ولكنه منطقي نظرًا لصغر حجم النموذج. من الصعب استهلاك التكلفة الإضافية لتتبع وقت تشغيل DDP.</p>
+</div>
+<div class="section" id="id7">
+<h3>MNIST ببيانات حقيقية<a class="headerlink" href="#id7" title="Permalink to this heading">¶</a></h3>
+<p>تم جمع النتائج التالية باستخدام الأمر: <code class="docutils literal notranslate"><span class="pre">python</span> <span class="pre">test/test_train_mp_mnist.py</span> <span class="pre">--logdir</span> <span class="pre">mnist/</span></code> في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT.</p>
+<a class="reference external image-reference" href="_static/img/ddp_md_mnist_with_real_data.png"><img alt="التعلم_المنحنيات" src="_images/ddp_md_mnist_with_real_data.png" /></a>
+<p>ويمكننا أن نلاحظ أن غلاف DDP يتقارب بشكل أبطأ من النهج الأصلي لـ XLA على الرغم من أنه لا يزال يحقق معدل دقة مرتفع يبلغ 97.48% في النهاية. (يحقق النهج الأصلي 99%.)</p>
+</div>
+</div>
+<div class="section" id="id8">
+<h2>إخلاء المسؤولية<a class="headerlink" href="#id8" title="Permalink to this heading">¶</a></h2>
+<p>لا تزال هذه الميزة تجريبية وهي قيد التطوير النشط. استخدمها بحذر، ولا تتردد في الإبلاغ عن أي أخطاء إلى <a class="reference external" href="https://github.com/pytorch/xla/">مستودع github xla</a>. بالنسبة لأولئك الذين يهتمون بالنهج الأصلي للتوازي في البيانات لـ xla، إليك <a class="reference external" href="../API_GUIDE.md#running-on-multiple-xla-devices-with-multi-processing">الدليل</a>.</p>
+<p>فيما يلي بعض المشكلات المعروفة التي يجري التحقيق فيها:</p>
+<ul class="simple">
+<li><p>يجب تطبيق <code class="docutils literal notranslate"><span class="pre">gradient_as_bucket_view=True</span></code>.</p></li>
+<li><p>هناك بعض المشكلات أثناء الاستخدام مع <code class="docutils literal notranslate"><span class="pre">torch.utils.data.DataLoader</span></code>. <code class="docutils literal notranslate"><span class="pre">test_train_mp_mnist.py</span></code> مع البيانات الحقيقية تتحطم قبل الخروج.</p></li>
+</ul>
+</div>
+<div class="section" id="fully-sharded-data-parallel-fsdp-pytorch-xla">
+<h2>Fully Sharded Data Parallel (FSDP) في PyTorch XLA<a class="headerlink" href="#fully-sharded-data-parallel-fsdp-pytorch-xla" title="Permalink to this heading">¶</a></h2>
+<p>تعتبر أداة Fully Sharded Data Parallel (FSDP) في PyTorch XLA أداة مفيدة لتقسيم معاملات الوحدات عبر العمّال المتوازيين للبيانات.</p>
+<p>مثال على الاستخدام:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">torch</span>
+<span class="kn">import</span> <span class="nn">torch_xla.core.xla_model</span> <span class="k">as</span> <span class="nn">xm</span>
+<span class="kn">import</span> <span class="nn">torch_xla.runtime</span> <span class="k">as</span> <span class="nn">xr</span>
+<span class="kn">from</span> <span class="nn">torch_xla.distributed.fsdp</span> <span class="kn">import</span> <span class="n">XlaFullyShardedDataParallel</span> <span class="k">as</span> <span class="n">FSDP</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">FSDP</span><span class="p">(</span><span class="n">my_module</span><span class="p">)</span>
+<span class="n">optim</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">optim</span><span class="o">.</span><span class="n">Adam</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">parameters</span><span class="p">(),</span> <span class="n">lr</span><span class="o">=</span><span class="mf">0.0001</span><span class="p">)</span>
+<span class="n">output</span> <span class="o">=</span> <span class="n">model</span><span class="p">(</span><span class="n">x</span><span class="p">,</span> <span class="n">y</span><span class="p">)</span>
+<span class="n">loss</span> <span class="o">=</span> <span class="n">output</span><span class="o">.</span><span class="n">sum</span><span class="p">()</span>
+<span class="n">loss</span><span class="o">.</span><span class="n">backward</span><span class="p">()</span>
+<span class="n">optim</span><span class="o">.</span><span class="n">step</span><span class="p">()</span>
+</pre></div>
+</div>
+<p>من الممكن أيضًا تقسيم الطبقات الفردية بشكل منفصل وإحاطة أي معلمات متبقية بمُحيط خارجي.</p>
+<p>ملاحظات:</p>
+<ul class="simple">
+<li><p>تدعم فئة <code class="docutils literal notranslate"><span class="pre">XlaFullyShardedDataParallel</span></code> كل من محسن ZeRO-2 (تقسيم المعاملات وتدرجات الحالة) ومحسن ZeRO-3 (تقسيم المعاملات والتدرجات وحالات المحسن) في <a class="reference external" href="https://arxiv.org/abs/1910.02054">https://arxiv.org/abs/1910.02054</a>.</p></li>
+<li><p>يجب تنفيذ محسن ZeRO-3 من خلال FSDP متداخلة مع <code class="docutils literal notranslate"><span class="pre">reshard_after_forward=True</span></code>. راجع <code class="docutils literal notranslate"><span class="pre">test/test_train_mp_mnist_fsdp_with_ckpt.py</span></code> و<code class="docutils literal notranslate"><span class="pre">test/test_train_mp_imagenet_fsdp.py</span></code> للحصول على مثال.</p></li>
+<li><p>بالنسبة للنماذج الكبيرة التي لا يمكن أن تتناسب مع ذاكرة TPU واحدة أو ذاكرة وحدة المعالجة المركزية المضيفة، يجب أن تتشابك عملية بناء الوحدة الفرعية مع الإحاطة الداخلية لـ FSDP. راجع <cite>``FSDPViTModel`</cite> &lt;<a class="reference external" href="https://github.com/ronghanghu/vit_10b_fsdp_example/blob/master/run_vit_training.py">https://github.com/ronghanghu/vit_10b_fsdp_example/blob/master/run_vit_training.py</a>&gt;`_ للحصول على مثال.</p></li>
+<li><p>يتم توفير غلاف بسيط <code class="docutils literal notranslate"><span class="pre">checkpoint_module</span></code> (بناءً على <code class="docutils literal notranslate"><span class="pre">torch_xla.utils.checkpoint.checkpoint</span></code> من <a class="reference external" href="https://github.com/pytorch/xla/pull/3524">https://github.com/pytorch/xla/pull/3524</a>) لأداء <a class="reference external" href="https://spell.ml/blog/gradient-checkpointing-pytorch-YGypLBAAACEAefHs">التحقق من نقطة التدرج</a> على مثيل <code class="docutils literal notranslate"><span class="pre">nn.Module</span></code> معين. راجع <code class="docutils literal notranslate"><span class="pre">test/test_train_mp_mnist_fsdp_with_ckpt.py</span></code> و<code class="docutils literal notranslate"><span class="pre">test/test_train_mp_imagenet_fsdp.py</span></code> للحصول على مثال.</p></li>
+<li><p>الإحاطة التلقائية بالوحدات الفرعية: بدلاً من الإحاطة اليدوية لـ FSDP المتداخلة، يمكنك أيضًا تحديد حجة <code class="docutils literal notranslate"><span class="pre">auto_wrap_policy</span></code> لإحاطة الوحدات الفرعية تلقائيًا بـ FSDP الداخلية. <code class="docutils literal notranslate"><span class="pre">size_based_auto_wrap_policy</span></code> في <code class="docutils literal notranslate"><span class="pre">torch_xla.distributed.fsdp.wrap</span></code> هو مثال على <code class="docutils literal notranslate"><span class="pre">auto_wrap_policy</span></code> قابل للاستدعاء، حيث يقوم هذا النهج بإحاطة الطبقات بعدد من المعلمات أكبر من 100 مليون. <code class="docutils literal notranslate"><span class="pre">transformer_auto_wrap_policy</span></code> في <code class="docutils literal notranslate"><span class="pre">torch_xla.distributed.fsdp.wrap</span></code> هو مثال على <code class="docutils literal notranslate"><span class="pre">auto_wrap_policy</span></code> قابل للاستدعاء لهندسات النماذج الشبيهة بالمحول.</p></li>
+</ul>
+<p>على سبيل المثال، لإحاطة جميع الوحدات الفرعية <code class="docutils literal notranslate"><span class="pre">torch.nn.Conv2d</span></code> تلقائيًا بـ FSDP الداخلية، يمكنك استخدام ما يلي:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">torch_xla.distributed.fsdp.wrap</span> <span class="kn">import</span> <span class="n">transformer_auto_wrap_policy</span>
+<span class="n">auto_wrap_policy</span> <span class="o">=</span> <span class="n">partial</span><span class="p">(</span><span class="n">transformer_auto_wrap_policy</span><span class="p">,</span> <span class="n">transformer_layer_cls</span><span class="o">=</span><span class="p">{</span><span class="n">torch</span><span class="o">.</span><span class="n">nn</span><span class="o">.</span><span class="n">Conv2d</span><span class="p">})</span>
+</pre></div>
+</div>
+<p>بالإضافة إلى ذلك، يمكنك أيضًا تحديد حجة <code class="docutils literal notranslate"><span class="pre">auto_wrapper_callable</span></code> لاستخدام وظيفة استدعاء مخصصة لإحاطة الوحدات الفرعية (غلاف الافتراضي هو فئة <code class="docutils literal notranslate"><span class="pre">XlaFullyShardedDataParallel</span></code> نفسها). على سبيل المثال، يمكنك استخدام ما يلي لتطبيق التحقق من التدرج (أي التحقق من نقطة التنشيط/إعادة المادة) على كل وحدة فرعية ملفوفة تلقائيًا.</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">torch_xla.distributed.fsdp</span> <span class="kn">import</span> <span class="n">checkpoint_module</span>
+<span class="n">auto_wrapper_callable</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">m</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">:</span> <span class="n">XlaFullyShardedDataParallel</span><span class="p">(</span>
+  <span class="n">checkpoint_module</span><span class="p">(</span><span class="n">m</span><span class="p">),</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>عند تشغيل المحسن، اتصل مباشرة بـ <code class="docutils literal notranslate"><span class="pre">optimizer.step</span></code> ولا تتصل بـ <code class="docutils literal notranslate"><span class="pre">xm.optimizer_step</span></code>. يؤدي هذا الأخير إلى تقليل التدرج عبر الرتب، وهو غير مطلوب لـ FSDP (حيث يتم تقسيم المعلمات بالفعل).</p></li>
+<li><p>عند حفظ نقاط التحقق للنموذج والمحسن أثناء التدريب، يجب على كل عملية تدريب حفظ نقطة التحقق الخاصة بها من القواميس (المقسمة) لحالة النموذج والمحسن (استخدم <code class="docutils literal notranslate"><span class="pre">master_only=False</span></code> وحدد مسارات مختلفة لكل رتبة في <code class="docutils literal notranslate"><span class="pre">xm.save</span></code>). عند الاستئناف، يجب تحميل نقطة التحقق للرتبة المقابلة.</p></li>
+<li><p>يرجى أيضًا حفظ <code class="docutils literal notranslate"><span class="pre">model.get_shard_metadata()</span></code> جنبًا إلى جنب مع <code class="docutils literal notranslate"><span class="pre">model.state_dict()</span></code> كما هو موضح أدناه واستخدام <code class="docutils literal notranslate"><span class="pre">consolidate_sharded_model_checkpoints</span></code> لربط نقاط التحقق للنموذج المقسم معًا في قاموس حالة النموذج الكامل. راجع <code class="docutils literal notranslate"><span class="pre">test/test_train_mp_mnist_fsdp_with_ckpt.py</span></code> للحصول على مثال.</p></li>
+</ul>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="n">ckpt</span> <span class="o">=</span> <span class="p">{</span>
+  <span class="s1">&#39;model&#39;</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+  <span class="s1">&#39;shard_metadata&#39;</span><span class="p">:</span> <span class="n">model</span><span class="o">.</span><span class="n">get_shard_metadata</span><span class="p">(),</span>
+  <span class="s1">&#39;optimizer&#39;</span><span class="p">:</span> <span class="n">optimizer</span><span class="o">.</span><span class="n">state_dict</span><span class="p">(),</span>
+<span class="p">}</span>
+<span class="n">ckpt_path</span> <span class="o">=</span> <span class="sa">f</span><span class="s1">&#39;/tmp/rank-</span><span class="si">{</span><span class="n">xr</span><span class="o">.</span><span class="n">global_ordinal</span><span class="p">()</span><span class="si">}</span><span class="s1">-of-</span><span class="si">{</span><span class="n">xr</span><span class="o">.</span><span class="n">world_size</span><span class="p">()</span><span class="si">}</span><span class="s1">.pth&#39;</span>
+<span class="n">xm</span><span class="o">.</span><span class="n">save</span><span class="p">(</span><span class="n">ckpt</span><span class="p">,</span> <span class="n">ckpt_path</span><span class="p">,</span> <span class="n">master_only</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span>
+</pre></div>
+</div>
+<ul class="simple">
+<li><p>يمكن أيضًا تشغيل برنامج توحيد نقاط التحقق من سطر الأوامر كما هو موضح أدناه.</p></li>
+</ul>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># دمج نقاط التحقق المحفوظة عبر أداة سطر الأوامر</span>
+python3<span class="w"> </span>-m<span class="w"> </span>torch_xla.distributed.fsdp.consolidate_sharded_ckpts<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_prefix<span class="w"> </span>/path/to/your_sharded_checkpoint_files<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_suffix<span class="w"> </span><span class="s2">&quot;_rank-*-of-*.pth&quot;</span>
+</pre></div>
+</div>
+<p>يستلهم تنفيذ هذه الفئة إلى حد كبير من هيكل <code class="docutils literal notranslate"><span class="pre">fairscale.nn.FullyShardedDataParallel</span></code> في <a class="reference external" href="https://fairscale.readthedocs.io/en/stable/api/nn/fsdp.html">https://fairscale.readthedocs.io/en/stable/api/nn/fsdp.html</a>. أحد أكبر الاختلافات عن <code class="docutils literal notranslate"><span class="pre">fairscale.nn.FullyShardedDataParallel</span></code> هو أنه في XLA، لا يوجد لدينا تخزين معلمات صريح، لذا فإننا نلجأ إلى نهج مختلف لتحرير المعلمات الكاملة لـ ZeRO-3.</p>
+<hr class="docutils" />
+<div class="section" id="mnist-imagenet">
+<h3>مثال على البرامج النصية للتدريب على MNIST وImageNet<a class="headerlink" href="#mnist-imagenet" title="Permalink to this heading">¶</a></h3>
+<ul class="simple">
+<li><p>الحد الأدنى من الأمثلة: <cite>``examples/fsdp/train_resnet_fsdp_auto_wrap.py`</cite> &lt;<a class="reference external" href="https://github.com/pytorch/xla/blob/master/examples/fsdp/train_resnet_fsdp_auto_wrap.py">https://github.com/pytorch/xla/blob/master/examples/fsdp/train_resnet_fsdp_auto_wrap.py</a>&gt;`_</p></li>
+<li><p>MNIST: <cite>``test/test_train_mp_mnist_fsdp_with_ckpt.py`</cite> &lt;<a class="reference external" href="https://github.com/pytorch/xla/blob/master/test/test_train_mp_mnist_fsdp_with_ckpt.py">https://github.com/pytorch/xla/blob/master/test/test_train_mp_mnist_fsdp_with_ckpt.py</a>&gt;`_ (يختبر أيضًا توحيد نقاط التحقق)</p></li>
+<li><p>ImageNet: <cite>``test/test_train_mp_imagenet_fsdp.py`</cite> &lt;<a class="reference external" href="https://github.com/pytorch/xla/blob/master/test/test_train_mp_imagenet_fsdp.py">https://github.com/pytorch/xla/blob/master/test/test_train_mp_imagenet_fsdp.py</a>&gt;`_</p></li>
+</ul>
+<div class="section" id="id11">
+<h4>التثبيت<a class="headerlink" href="#id11" title="Permalink to this heading">¶</a></h4>
+<p>تتوفر FSDP على PyTorch/XLA 1.12 release والإصدارات الأحدث من nightly. يرجى الرجوع إلى <a class="reference external" href="https://github.com/pytorch/xla#-available-images-and-wheels">https://github.com/pytorch/xla#-available-images-and-wheels</a> للحصول على دليل التثبيت.</p>
+</div>
+<div class="section" id="pytorch-xla">
+<h4>استنساخ مستودع PyTorch/XLA<a class="headerlink" href="#pytorch-xla" title="Permalink to this heading">¶</a></h4>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/pytorch/pytorch
+<span class="nb">cd</span><span class="w"> </span>pytorch/
+git<span class="w"> </span>clone<span class="w"> </span>--recursive<span class="w"> </span>https://github.com/pytorch/xla.git
+<span class="nb">cd</span><span class="w"> </span>~/
+</pre></div>
+</div>
+</div>
+<div class="section" id="mnist-v3-8-tpu">
+<h4>تدريب MNIST على v3-8 TPU<a class="headerlink" href="#mnist-v3-8-tpu" title="Permalink to this heading">¶</a></h4>
+<p>يحصل على دقة تبلغ حوالي 98.9 لدورتين:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>~/pytorch/xla/test/test_train_mp_mnist_fsdp_with_ckpt.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--batch_size<span class="w"> </span><span class="m">16</span><span class="w"> </span>--drop_last<span class="w"> </span>--num_epochs<span class="w"> </span><span class="m">2</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--use_nested_fsdp<span class="w"> </span>--use_gradient_checkpointing
+</pre></div>
+</div>
+<p>يختبر هذا البرنامج النصي تلقائيًا توحيد نقاط التحقق في النهاية. يمكنك أيضًا توحيد نقاط التحقق المقسمة يدويًا كما هو موضح أدناه:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="c1"># دمج نقاط التحقق المحفوظة عبر أداة سطر الأوامر</span>
+python3<span class="w"> </span>-m<span class="w"> </span>torch_xla.distributed.fsdp.consolidate_sharded_ckpts<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_prefix<span class="w"> </span>/tmp/mnist-fsdp/final_ckpt<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--ckpt_suffix<span class="w"> </span><span class="s2">&quot;_rank-*-of-*.pth&quot;</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="imagenet-resnet-50-v3-8-tpu">
+<h4>تدريب ImageNet مع ResNet-50 على v3-8 TPU<a class="headerlink" href="#imagenet-resnet-50-v3-8-tpu" title="Permalink to this heading">¶</a></h4>
+<p>يحصل على دقة تبلغ حوالي 75.9 لـ 100 حقبة؛ قم بتنزيل <a class="reference external" href="https://github.com/pytorch/examples/tree/master/imagenet#requirements">ImageNet-1k</a> إلى <code class="docutils literal notranslate"><span class="pre">/datasets/imagenet-1k</span></code>:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span>python3<span class="w"> </span>~/pytorch/xla/test/test_train_mp_imagenet_fsdp.py<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--datadir<span class="w"> </span>/datasets/imagenet-1k<span class="w"> </span>--drop_last<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--model<span class="w"> </span>resnet50<span class="w"> </span>--test_set_batch_size<span class="w"> </span><span class="m">64</span><span class="w"> </span>--eval_interval<span class="w"> </span><span class="m">10</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lr<span class="w"> </span><span class="m">0</span>.4<span class="w"> </span>--batch_size<span class="w"> </span><span class="m">128</span><span class="w"> </span>--num_warmup_epochs<span class="w"> </span><span class="m">5</span><span class="w"> </span>--lr_scheduler_divide_every_n_epochs<span class="w"> </span><span class="m">30</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--lr_scheduler_divisor<span class="w"> </span><span class="m">10</span><span class="w"> </span>--num_epochs<span class="w"> </span><span class="m">100</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>--use_nested_fsdp
+</pre></div>
+</div>
+<p>يمكنك أيضًا إضافة <code class="docutils literal notranslate"><span class="pre">--use_gradient_checkpointing</span></code> (الذي يجب أن يستخدم مع <code class="docutils literal notranslate"><span class="pre">--use_nested_fsdp</span></code> أو <code class="docutils literal notranslate"><span class="pre">--auto_wrap_policy</span></code>) لتطبيق نقاط التحقق التدريجية على الكتل المتبقية.</p>
+</div>
+</div>
+<hr class="docutils" />
+<div class="section" id="tpu-10">
+<h3>نصوص تدريب مثالية على حزمة TPU (مع 10 مليارات معلمة)<a class="headerlink" href="#tpu-10" title="Permalink to this heading">¶</a></h3>
+<p>لتدريب نماذج كبيرة لا تتسع في TPU واحد، يجب تطبيق التغليف التلقائي أو تغليف الوحدات الفرعية يدويًا باستخدام FSDP الداخلي عند بناء النموذج بأكمله لتنفيذ خوارزمية ZeRO-3.</p>
+<p>يرجى الاطلاع على <a class="reference external" href="https://github.com/ronghanghu/vit_10b_fsdp_example">https://github.com/ronghanghu/vit_10b_fsdp_example</a> للحصول على مثال عن التدريب المجزأ لنموذج Vision Transformer (ViT) باستخدام هذا الإصدار من XLA FSDP.</p>
+</div>
+</div>
+</div>
+
+
+             </article>
+             
+            </div>
+            <footer>
+  
+    <div class="rst-footer-buttons" role="navigation" aria-label="footer navigation">
+      
+        <a href="quantized_ops.html" class="btn btn-neutral float-right" title="عمليات كمية لأجهزة XLA (ميزة تجريبية)" accesskey="n" rel="next">Next <img src="_static/images/chevron-right-orange.svg" class="next-page"></a>
+      
+      
+        <a href="gpu.html" class="btn btn-neutral" title="كيفية التشغيل باستخدام PyTorch/XLA:GPU" accesskey="p" rel="prev"><img src="_static/images/chevron-right-orange.svg" class="previous-page"> Previous</a>
+      
+    </div>
+  
+
+  
+
+    <hr>
+
+  
+
+  <div role="contentinfo">
+    <p>
+        &copy; Copyright .
+
+    </p>
+  </div>
+    
+      <div>
+        Built with <a href="http://sphinx-doc.org/">Sphinx</a> using a <a href="https://github.com/rtfd/sphinx_rtd_theme">theme</a> provided by <a href="https://readthedocs.org">Read the Docs</a>.
+      </div>
+     
+
+</footer>
+
+          </div>
+        </div>
+
+        <div class="pytorch-content-right" id="pytorch-content-right">
+          <div class="pytorch-right-menu" id="pytorch-right-menu">
+            <div class="pytorch-side-scroll" id="pytorch-side-scroll-right">
+              <ul>
+<li><a class="reference internal" href="#">كيفية تنفيذ DistributedDataParallel (DDP)</a><ul>
+<li><a class="reference internal" href="#id2">الخلفية / الدافع</a></li>
+<li><a class="reference internal" href="#distributeddataparallel">كيفية استخدام DistributedDataParallel</a></li>
+<li><a class="reference internal" href="#id4">المعايرة</a><ul>
+<li><a class="reference internal" href="#resnet50">Resnet50 ببيانات وهمية</a></li>
+<li><a class="reference internal" href="#mnist">MNIST ببيانات وهمية</a></li>
+<li><a class="reference internal" href="#id7">MNIST ببيانات حقيقية</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#id8">إخلاء المسؤولية</a></li>
+<li><a class="reference internal" href="#fully-sharded-data-parallel-fsdp-pytorch-xla">Fully Sharded Data Parallel (FSDP) في PyTorch XLA</a><ul>
+<li><a class="reference internal" href="#mnist-imagenet">مثال على البرامج النصية للتدريب على MNIST وImageNet</a><ul>
+<li><a class="reference internal" href="#id11">التثبيت</a></li>
+<li><a class="reference internal" href="#pytorch-xla">استنساخ مستودع PyTorch/XLA</a></li>
+<li><a class="reference internal" href="#mnist-v3-8-tpu">تدريب MNIST على v3-8 TPU</a></li>
+<li><a class="reference internal" href="#imagenet-resnet-50-v3-8-tpu">تدريب ImageNet مع ResNet-50 على v3-8 TPU</a></li>
+</ul>
+</li>
+<li><a class="reference internal" href="#tpu-10">نصوص تدريب مثالية على حزمة TPU (مع 10 مليارات معلمة)</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+  
+
+
+  
+
+     
+       <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+         <script data-url_root="./" id="documentation_options" src="_static/documentation_options.js"></script>
+         <script src="_static/jquery.js"></script>
+         <script src="_static/underscore.js"></script>
+         <script src="_static/_sphinx_javascript_frameworks_compat.js"></script>
+         <script src="_static/doctools.js"></script>
+         <script src="_static/sphinx_highlight.js"></script>
+     
+
+  
+
+  <script type="text/javascript" src="_static/js/vendor/popper.min.js"></script>
+  <script type="text/javascript" src="_static/js/vendor/bootstrap.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/list.js/1.5.0/list.min.js"></script>
+  <script type="text/javascript" src="_static/js/theme.js"></script>
+
+  <script type="text/javascript">
+      jQuery(function () {
+          SphinxRtdTheme.Navigation.enable(true);
+      });
+  </script> 
+
+  <!-- Begin Footer -->
+
+  <div class="container-fluid docs-tutorials-resources" id="docs-tutorials-resources">
+    <div class="container">
+      <div class="row">
+        <div class="col-md-4 text-center">
+          <h2>Docs</h2>
+          <p>Access comprehensive developer documentation for PyTorch</p>
+          <a class="with-right-arrow" href="https://pytorch.org/docs/stable/index.html">View Docs</a>
+        </div>
+
+        <div class="col-md-4 text-center">
+          <h2>Tutorials</h2>
+          <p>Get in-depth tutorials for beginners and advanced developers</p>
+          <a class="with-right-arrow" href="https://pytorch.org/tutorials">View Tutorials</a>
+        </div>
+
+        <div class="col-md-4 text-center">
+          <h2>Resources</h2>
+          <p>Find development resources and get your questions answered</p>
+          <a class="with-right-arrow" href="https://pytorch.org/resources">View Resources</a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <footer class="site-footer">
+    <div class="container footer-container">
+      <div class="footer-logo-wrapper">
+        <a href="https://pytorch.org/" class="footer-logo"></a>
+      </div>
+
+      <div class="footer-links-wrapper">
+        <div class="footer-links-col">
+          <ul>
+            <li class="list-title"><a href="https://pytorch.org/">PyTorch</a></li>
+            <li><a href="https://pytorch.org/get-started">Get Started</a></li>
+            <li><a href="https://pytorch.org/features">Features</a></li>
+            <li><a href="https://pytorch.org/ecosystem">Ecosystem</a></li>
+            <li><a href="https://pytorch.org/blog/">Blog</a></li>
+            <li><a href="https://github.com/pytorch/pytorch/blob/master/CONTRIBUTING.md">Contributing</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <ul>
+            <li class="list-title"><a href="https://pytorch.org/resources">Resources</a></li>
+            <li><a href="https://pytorch.org/tutorials">Tutorials</a></li>
+            <li><a href="https://pytorch.org/docs/stable/index.html">Docs</a></li>
+            <li><a href="https://discuss.pytorch.org" target="_blank">Discuss</a></li>
+            <li><a href="https://github.com/pytorch/pytorch/issues" target="_blank">Github Issues</a></li>
+            <li><a href="https://pytorch.org/assets/brand-guidelines/PyTorch-Brand-Guidelines.pdf" target="_blank">Brand Guidelines</a></li>
+          </ul>
+        </div>
+
+        <div class="footer-links-col">
+          <ul>
+            <li class="list-title">Stay up to date</li>
+            <li><a href="https://www.facebook.com/pytorch" target="_blank">Facebook</a></li>
+            <li><a href="https://twitter.com/pytorch" target="_blank">Twitter</a></li>
+            <li><a href="https://www.youtube.com/pytorch" target="_blank">YouTube</a></li>
+            <li><a href="https://www.linkedin.com/company/pytorch" target="_blank">LinkedIn</a></li>
+          </ul>  
+          </div>
+
+        <div class="footer-links-col">
+          <ul>
+            <li class="list-title">PyTorch Podcasts</li>
+            <li><a href="https://open.spotify.com/show/6UzHKeiy368jKfQMKKvJY5" target="_blank">Spotify</a></li>
+            <li><a href="https://podcasts.apple.com/us/podcast/pytorch-developer-podcast/id1566080008" target="_blank">Apple</a></li>
+            <li><a href="https://www.google.com/podcasts?feed=aHR0cHM6Ly9mZWVkcy5zaW1wbGVjYXN0LmNvbS9PQjVGa0lsOA%3D%3D" target="_blank">Google</a></li>
+            <li><a href="https://music.amazon.com/podcasts/7a4e6f0e-26c2-49e9-a478-41bd244197d0/PyTorch-Developer-Podcast?" target="_blank">Amazon</a></li>
+          </ul>
+         </div>
+        </div>
+        
+        <div class="privacy-policy">
+          <ul>
+            <li class="privacy-policy-links"><a href="https://www.linuxfoundation.org/terms/" target="_blank">Terms</a></li>
+            <li class="privacy-policy-links">|</li>
+            <li class="privacy-policy-links"><a href="https://www.linuxfoundation.org/privacy-policy/" target="_blank">Privacy</a></li>
+          </ul>
+        </div>
+        <div class="copyright">
+        <p>© Copyright The Linux Foundation. The PyTorch Foundation is a project of The Linux Foundation.
+          For web site terms of use, trademark policy and other policies applicable to The PyTorch Foundation please see
+          <a href="https://www.linuxfoundation.org/policies/">www.linuxfoundation.org/policies/</a>. The PyTorch Foundation supports the PyTorch open source
+          project, which has been established as PyTorch Project a Series of LF Projects, LLC. For policies applicable to the PyTorch Project a Series of LF Projects, LLC,
+          please see <a href="https://www.lfprojects.org/policies/">www.lfprojects.org/policies/</a>.</p>
+      </div>
+     </div>
+
+  </footer>
+
+  <div class="cookie-banner-wrapper">
+  <div class="container">
+    <p class="gdpr-notice">To analyze traffic and optimize your experience, we serve cookies on this site. By clicking or navigating, you agree to allow our usage of cookies. As the current maintainers of this site, Facebook’s Cookies Policy applies. Learn more, including about available controls: <a href="https://www.facebook.com/policies/cookies/">Cookies Policy</a>.</p>
+    <img class="close-button" src="_static/images/pytorch-x.svg">
+  </div>
+</div>
+
+  <!-- End Footer -->
+
+  <!-- Begin Mobile Menu -->
+
+  <div class="mobile-main-menu">
+    <div class="container-fluid">
+      <div class="container">
+        <div class="mobile-main-menu-header-container">
+          <a class="header-logo" href="https://pytorch.org/" aria-label="PyTorch"></a>
+          <a class="main-menu-close-button" href="#" data-behavior="close-mobile-menu"></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="mobile-main-menu-links-container">
+      <div class="main-menu">
+        <ul>
+           <li class="resources-mobile-menu-title">
+             <a>Learn</a>
+           </li>
+           <ul class="resources-mobile-menu-items">
+             <li>
+               <a href="https://pytorch.org/get-started">Get Started</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/tutorials">Tutorials</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/tutorials/beginner/basics/intro.html">Learn the Basics</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/tutorials/recipes/recipes_index.html">PyTorch Recipes</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/tutorials/beginner/introyt.html">Introduction to PyTorch - YouTube Series</a>
+             </li>
+           </ul>
+           <li class="resources-mobile-menu-title">
+             <a>Ecosystem</a>
+           </li>
+           <ul class="resources-mobile-menu-items">
+             <li>
+               <a href="https://pytorch.org/ecosystem">Tools</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/#community-module">Community</a>
+             </li>
+             <li>
+               <a href="https://discuss.pytorch.org/">Forums</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/resources">Developer Resources</a>
+             </li>
+             <li>
+               <a href="https://pytorch.org/ecosystem/contributor-awards-2023">Contributor Awards - 2023</a>
+             </li>
+           </ul>
+
+           <li class="resources-mobile-menu-title">
+             <a>Edge</a>
+           </li>
+
+           <ul class="resources-mobile-menu-items">
+             <li>
+               <a href="https://pytorch.org/edge">About PyTorch Edge</a>
+             </li>
+             
+             <li>
+               <a href="https://pytorch.org/executorch-overview">ExecuTorch</a>
+             </li>
+           </ul>
+
+           <li class="resources-mobile-menu-title">
+             <a>Docs</a>
+           </li>
+
+           <ul class="resources-mobile-menu-items">
+            <li>
+              <a href="https://pytorch.org/docs/stable/index.html">PyTorch</a>
+            </li>
+
+            <li>
+              <a href="https://pytorch.org/pytorch-domains">PyTorch Domains</a>
+            </li>
+          </ul>
+
+          <li class="resources-mobile-menu-title">
+            <a>Blog & News</a>
+          </li>
+            
+           <ul class="resources-mobile-menu-items">
+            <li>
+              <a href="https://pytorch.org/blog/">PyTorch Blog</a>
+            </li>
+            <li>
+              <a href="https://pytorch.org/community-blog">Community Blog</a>
+            </li>
+
+            <li>
+              <a href="https://pytorch.org/videos">Videos</a>
+            </li>
+
+            <li>
+              <a href="https://pytorch.org/community-stories">Community Stories</a>
+            </li>
+            <li>
+              <a href="https://pytorch.org/events">Events</a>
+            </li>
+          </ul>
+          
+          <li class="resources-mobile-menu-title">
+            <a>About</a>
+          </li>
+
+          <ul class="resources-mobile-menu-items">
+            <li>
+              <a href="https://pytorch.org/foundation">PyTorch Foundation</a>
+            </li>
+            <li>
+              <a href="https://pytorch.org/governing-board">Governing Board</a>
+            </li>
+          </ul>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Mobile Menu -->
+
+  <script type="text/javascript" src="_static/js/vendor/anchor.min.js"></script>
+
+  <script type="text/javascript">
+    $(document).ready(function() {
+      mobileMenu.bind();
+      mobileTOC.bind();
+      pytorchAnchors.bind();
+      sideMenus.bind();
+      scrollToAnchor.bind();
+      highlightNavigation.bind();
+      mainMenuDropdown.bind();
+      filterTags.bind();
+
+      // Add class to links that have code blocks, since we cannot create links in code blocks
+      $("article.pytorch-article a span.pre").each(function(e) {
+        $(this).closest("a").addClass("has-code");
+      });
+    })
+  </script>
+</body>
+</html>
