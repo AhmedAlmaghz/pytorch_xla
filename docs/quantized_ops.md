@@ -1,26 +1,16 @@
-# Quantized Operations for XLA device (Experimental feature)
+# عمليات كمية لأجهزة XLA (ميزة تجريبية)
 --------------------------
+توضح هذه الوثيقة كيفية استخدام العمليات الكمية لتمكين التكميم على أجهزة XLA.
+توفر عمليات XLA الكمية مستوى عالي من التجريد للعمليات الكمية (مثل، الضرب الكمي للمصفوفات blockwise int4). هذه العمليات مماثلة لنوى CUDA الكمية ([مثال](https://github.com/vllm-project/vllm/blob/main/csrc/quantization/gptq/q_gemm.cu)) في نظام CUDA، وتوفر وظائف ومزايا أداء مماثلة داخل إطار عمل XLA.
+**ملاحظة:** حالياً، يتم تصنيف هذه الميزة على أنها تجريبية. سيتم تغيير تفاصيل واجهة برمجة التطبيقات الخاصة بها في الإصدار التالي (2.5).
 
-This document outlines how to utilize quantized operations to enable quantization on XLA devices.
+## كيفية الاستخدام:
+يمكن استخدام العمليات الكمية XLA كـ `torch op`، أو كـ `torch.nn.Module` الذي يغلف `torch.op`. يمنح هذان الخياران مطورو النماذج المرونة لاختيار أفضل طريقة لدمج العمليات الكمية XLA في حلولهم.
+يتوافق كل من `torch op` و`nn.Module` مع `torch.compile( backend='openxla')`.
 
-XLA Quantized ops offer a high-level abstraction for quantized operations (e.g., blockwise int4 quantized matrix multiplication). These ops are analogous to quantized CUDA kernels ([example](https://github.com/vllm-project/vllm/blob/main/csrc/quantization/gptq/q_gemm.cu)) in the CUDA ecosystem, providing similar functionality and performance benefits within the XLA framework.
-
-**NOTE:** Currently this is classified as experimental feature. It's API specifics 
-will change in the next (2.5) release.
-
-
-## How to use:
-
-XLA quantized operations can be used as `torch op`, or a `torch.nn.Module` that wraps the `torch.op`. These 2 options give model developers the flexibility to choose the best way to integrate XLA quantized ops into their solution.
-
-Both `torch op` and `nn.Module` are compatible with `torch.compile( backend='openxla')`.
-
-### Call XLA quantized op in model code
-
-Users can call XLA quantized ops in the same way as calling other regular PyTorch ops. This provides maximum flexibility in integrating XLA quantized ops into their applications. The quantized ops work in both eager mode and Dynamo, with regular PyTorch CPU tensor and XLA tensor.
-
-**Note** Please check the docstring of the quantized ops for the layout of the quantized weights.
-
+### استدعاء العملية الكمية XLA في كود النموذج
+يمكن للمستخدمين استدعاء العمليات الكمية XLA بنفس طريقة استدعاء عمليات PyTorch العادية الأخرى. يوفر ذلك أقصى قدر من المرونة في دمج العمليات الكمية XLA في تطبيقاتهم. تعمل العمليات الكمية في كل من الوضع الفوري وDynamo، مع مصفوفة PyTorch CPU العادية ومصفوفة XLA.
+**ملاحظة** يرجى التحقق من docstring للعمليات الكمية لمعرفة تخطيط الأوزان الكمية.
 ```Python
 import torch
 import torch_xla.core.xla_model as xm
@@ -32,7 +22,7 @@ x = torch.randn((3, N_INPUT_FEATURES), dtype=torch.bfloat16)
 w_int = torch.randint(-128, 127, (N_OUTPUT_FEATURES, N_INPUT_FEATURES), dtype=torch.int8)
 scaler = torch.randn((N_OUTPUT_FEATURES,), dtype=torch.bfloat16)
 
-# Call with torch CPU tensor (For debugging purpose)
+# الاستدعاء باستخدام مصفوفة CPU الخاصة بـ PyTorch (لغرض التصحيح)
 matmul_output = torch.ops.xla.quantized_matmul(x, w_int, scaler)
 
 device = xm.xla_device()
@@ -40,19 +30,17 @@ x_xla = x.to(device)
 w_int_xla = w_int.to(device)
 scaler_xla = scaler.to(device)
 
-# Call with XLA Tensor to run on XLA device
+# الاستدعاء باستخدام مصفوفة XLA لتشغيلها على جهاز XLA
 matmul_output_xla = torch.ops.xla.quantized_matmul(x_xla, w_int_xla, scaler_xla)
 
-# Use with torch.compile(backend='openxla')
+# الاستخدام مع torch.compile(backend='openxla')
 def f(x, w, s):
   return torch.ops.xla.quantized_matmul(x, w, s)
 
 f_dynamo = torch.compile(f, backend="openxla")
 dynamo_out_xla = f_dynamo(x_xla, w_int_xla, scaler_xla)
 ```
-
-It's common to wrap the quantized op into a custom `nn.Module` in model developers model code:
-
+من الشائع تغليف العملية الكمية في وحدة `nn.Module` مخصصة في كود نموذج المطور:
 ```Python
 class MyQLinearForXLABackend(torch.nn.Module):
   def __init__(self):
@@ -75,40 +63,35 @@ class MyQLinearForXLABackend(torch.nn.Module):
     ...
 ```
 
-### Module Swap
-
-Alternatively, users can also use the `nn.Module` that wraps the XLA quantized ops and do module swap in the model code:
+### تبديل الوحدات
+بدلاً من ذلك، يمكن للمستخدمين أيضًا استخدام وحدة `nn.Module` التي تغلف العمليات الكمية XLA وإجراء تبديل الوحدات في كود النموذج:
 
 ```Python
 orig_model = MyModel()
-# Quantize the model and get quantized weights
+# تكميم النموذج والحصول على الأوزان الكمية
 q_weights = quantize(orig_model)
-# Process the quantized weight to the format that XLA quantized op expects.
+# معالجة الأوزان الكمية لتتوافق مع تنسيق العملية الكمية XLA.
 q_weights_for_xla = process_for_xla(q_weights)
 
-# Do module swap
-q_linear = XlaQuantizedLinear(self.linear.in_features,
-                              self.linear.out_features)
+# إجراء تبديل الوحدات
+q_linear = XlaQuantizedLinear(self.linear.in_features,self.linear.out_features)
 q_linear.load_quantized_weight(q_weights_for_xla)
 orig_model.linear = q_linear
 ```
 
-## Supported Quantized Operations:
-
-### Matrix Multiply
-
-| Weight Quantization Type | Activation Quantization Type | Dtype | Supported |
+## العمليات الكمية المدعومة:
+### ضرب المصفوفات
+| نوع تكميم الأوزان | نوع تكميم التنبيهات | Dtype | مدعوم |
 |---|---|---|---|
-| per-channel (sym/asym) | N/A | W8A16 | Yes |
-| per-channel  (sym/asym) | N/A | W4A16 | Yes |
-| per-channel | per-token | W8A8 | No |
-| per-channel | per-token | W4A8 | No |
-| blockwise (sym/asym) | N/A | W8A16 | Yes |
-| blockwise (sym/asym) | N/A | W4A16 | Yes |
-| blockwise | per-token | W8A8 | No |
-| blockwise | per-token | W4A8 | No |
+| لكل قناة (sym/asym) | N/A | W8A16 | نعم |
+| لكل قناة (sym/asym) | N/A | W4A16 | نعم |
+| لكل قناة | لكل رمز | W8A8 | لا |
+| لكل قناة | لكل رمز | W4A8 | لا |
+| blockwise (sym/asym) | N/A | W8A16 | نعم |
+| blockwise (sym/asym) | N/A | W4A16 | نعم |
+| blockwise | لكل رمز | W8A8 | لا |
+| blockwise | لكل رمز | W4A8 | لا |
+**ملاحظة** تشير `W[X]A[Y]` إلى وزن في `X`-بت، وتنشيط في `Y`-بت. إذا كان `X/Y` هو 4 أو 8، فإنه يشير إلى `int4/8`. 16 لتنسيق `bfloat16`.
 
-**Note** `W[X]A[Y]` refers to Weight in `X`-bit, Activation in `Y`-bit. If `X/Y` is 4 or 8, it refers to `int4/8`. 16 for `bfloat16` format.
-
-### Embedding
-To be added
+### تضمين
+سيتم إضافته
