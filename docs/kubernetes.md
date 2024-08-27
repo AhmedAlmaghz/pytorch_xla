@@ -1,20 +1,12 @@
-# Distributed training on GKE
+# التدريب الموزع على GKE
 
-PyTorch/XLA supports distributed training on GKE via [indexed
-`Job`s](https://kubernetes.io/docs/tasks/job/job-with-pod-to-pod-communication/)
-and `torchrun`. For more information about creating a GKE cluster with
-accelerators, see the documentation for
-[TPUs](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus) and
-[GPUs](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus),
-respectively.
+يدعم PyTorch/XLA التدريب الموزع على GKE عبر [الوظائف المفهرسة](https://kubernetes.io/docs/tasks/job/job-with-pod-to-pod-communication/) و`torchrun`. لمزيد من المعلومات حول إنشاء مجموعة GKE مع مسرعات، راجع وثائق [TPUs](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus) و[GPUs](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus)، على التوالي.
 
-## GPU Example
+## مثال GPU
 
-GKE is the recommended platform for distributed training with GPUs. This example
-uses two hosts, each with two NVidia v100 GPUs. Adjust the values according
-to the comments in the example for a larger or smaller cluster.
+GKE هو المنصة الموصى بها للتدريب الموزع باستخدام GPUs. يستخدم هذا المثال مضيفين، لكل منهما وحدتي معالجة رسوميات Nvidia v100. قم بتعديل القيم وفقًا للتعليقات في المثال لمجموعة أكبر أو أصغر.
 
-Create a new file `gpu_test.yaml` with the following:
+قم بإنشاء ملف جديد `gpu_test.yaml` بما يلي:
 
 ```yaml
 # Headless service used for service discovery.
@@ -108,7 +100,7 @@ spec:
         name: dshm
 ```
 
-Once the job schedules, you should start seeing logs like this:
+بمجرد جدولة الوظيفة، يجب أن تبدأ في رؤية سجلات مثل هذه:
 
 ```
 $ kubectl logs job/torch-xla-resnet50-v100-x2x2
@@ -167,14 +159,11 @@ Max Accuracy: 100.00%
 
 ## TPUs
 
-Training on TPU is similar to training on GPU in GKE, the same steps for `torchrun` apply. For more
-information about TPU GKE clusters, see [GKE's official
-docs](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
+يُشبه التدريب على TPU التدريب على GPU في GKE، وتنطبق الخطوات نفسها لـ `torchrun`. لمزيد من المعلومات حول مجموعات GKE TPU، راجع [وثائق GKE الرسمية](https://cloud.google.com/kubernetes-engine/docs/how-to/tpus).
 
-The example below use two ct5lp-hightpu-4t VMs, with 4 v5e TPU each to construct a 2x4 topology nodepool.
-You can adjust the values accordingly to match the training requirement.
+يستخدم المثال أدناه آلتين افتراضيتين من نوع ct5lp-hightpu-4t VM، مع 4 وحدات TPU v5e لكل منهما لبناء مجموعة عقد ذات طوبولوجيا 2x4. يمكنك ضبط القيم وفقًا لذلك لتتناسب مع متطلبات التدريب.
 
-Create a new file `tpu_test.yaml` with the following:
+قم بإنشاء ملف جديد `tpu_test.yaml` بما يلي:
 
 ```yaml
 apiVersion: v1
@@ -285,7 +274,7 @@ spec:
             google.com/tpu: 4
 ```
 
-Once the job schedules, you should start seeing logs like this:
+بمجرد جدولة الوظيفة، يجب أن تبدأ في رؤية سجلات مثل هذه:
 
 ```
 $ kubectl logs job/torch-xla-tpu-2x4
@@ -297,7 +286,7 @@ Cloning into 'pytorch/xla'...
 ==> Preparing data..
 Epoch 1 train begin 23:10:22
 || Training Device=xla:0/3 Epoch=1 Step=0 Loss=6.89059 Rate=4.64 GlobalRate=4.64 Time=23:10:54
- Training Device=xla:0/0 Epoch=1 Step=0 Loss=6.89059 Rate=3.97 GlobalRate=3.97 Time=23:10:54
+Training Device=xla:0/0 Epoch=1 Step=0 Loss=6.89059 Rate=3.97 GlobalRate=3.97 Time=23:10:54
 | Training Device=xla:0/1 Epoch=1 Step=0 Loss=6.89059 Rate=4.13 GlobalRate=4.13 Time=23:10:54
 | Training Device=xla:0/2 Epoch=1 Step=0 Loss=6.89059 Rate=3.99 GlobalRate=3.99 Time=23:10:54
 ...\
