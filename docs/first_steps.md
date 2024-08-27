@@ -1,63 +1,57 @@
-### **Objective:**
-This document provides a high-level overview of PyTorch XLA and illustrates a
-few examples how PyTorch code is converted to run on XLA devices (e.g. TPUs).
-This is not a complete solution, and additional changes may be required
-depending on the specific code. However, this document should serve as a
-starting point for the conversion process.
+## الهدف:
+يقدم هذا المستند نظرة عامة عالية المستوى على PyTorch XLA ويُظهر بعض الأمثلة على كيفية تحويل كود PyTorch لتشغيله على أجهزة XLA (مثل وحدات معالجة Tensor). هذه ليست حلاً كاملاً، وقد تكون هناك حاجة إلى تغييرات إضافية اعتمادًا على الكود المحدد. ومع ذلك، يجب أن يُستخدم هذا المستند كنقطة بداية لعملية التحويل.
 
+# الفهم الأساسي لبعض تفاصيل XLA
+يوفر هذا القسم نظرة عامة موجزة على التفاصيل الأساسية لـ PyTorch XLA، والتي يجب أن تساعد القراء على فهم التعديلات والتحسينات المطلوبة للكود بشكل أفضل.
 
-# Basic high-level understanding of some XLA details
-This section provides a brief overview of the basic details of PyTorch XLA,
- which should help readers better understand the required modifications and
- optimizations of code.
-
-Unlike regular PyTorch, which executes code line by line and does not block execution until the value of a <ins> PyTorch tensor </ins> is fetched, PyTorch XLA works differently. It iterates through the python code and records the operations on <ins> (PyTorch) XLA tensors </ins> in an intermediate representation (IR) graph until it encounters a barrier (discussed below). This process of generating the IR graph is referred to as tracing (LazyTensor tracing or code tracing). PyTorch XLA then converts the IR graph to a lower-level machine-readable format called HLO (High-Level Opcodes). HLO is a representation of a computation that is specific to the XLA compiler and allows it to generate efficient code for the hardware that it is running on. HLO is fed to the XLA compiler for compilation and optimization. Compilation is then cached by PyTorch XLA to be reused later if/when needed. The compilation of the graph is done on the host (CPU), which is the machine that runs the Python code. If there are multiple XLA devices, the host compiles the code for each of the devices separately except when using SPMD (single-program, multiple-data). For example, v4-8 has one host machine and [four devices](https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v4). In this case the host compiles the code for each of the four devices separately. In case of pod slices, when there are multiple hosts, each host does the compilation for XLA devices it is attached to. If SPMD is used, then the code is compiled only once (for given shapes and computations) on each host for all the devices.
+على عكس PyTorch العادي، الذي ينفذ الكود سطرًا تلو الآخر ولا يمنع التنفيذ حتى يتم جلب قيمة موتر PyTorch، يعمل PyTorch XLA بشكل مختلف. فهو يمر عبر كود Python ويسجل العمليات على موترات XLA (PyTorch) في رسم بياني للتمثيل الوسيط (IR) حتى يواجه حاجزًا (سيتم مناقشته أدناه). تُعرف عملية إنشاء الرسم البياني IR باسم التتبع (تتبع LazyTensor أو تتبع الكود). ثم يحول PyTorch XLA رسم IR إلى تنسيق قابل للقراءة من قبل الآلة منخفض المستوى يسمى HLO (رموز Opcodes عالية المستوى). HLO هو تمثيل لحساب محدد لمترجم XLA، مما يسمح له بتوليد كود فعال للأجهزة التي يعمل عليها. يتم تغذية HLO إلى مترجم XLA للترجمة والتحسين. ثم يتم تخزين الترجمة بواسطة PyTorch XLA لإعادة استخدامها لاحقًا إذا/عندما تكون هناك حاجة إليها. تتم الترجمة على المضيف (وحدة المعالجة المركزية)، والتي هي الآلة التي تعمل كود Python. إذا كان هناك عدة أجهزة XLA، يقوم المضيف بترجمة الكود لكل من الأجهزة بشكل منفصل باستثناء عند استخدام SPMD (برنامج واحد، بيانات متعددة). على سبيل المثال، يحتوي v4-8 على آلة مضيفة واحدة و[أربع أجهزة](https://cloud.google.com/tpu/docs/system-architecture-tpu-vm#tpu_v4). في هذه الحالة، يقوم المضيف بترجمة الكود لكل من الأجهزة الأربعة بشكل منفصل. في حالة شرائح pod، عندما يكون هناك مضيفون متعددون، يقوم كل مضيف بالترجمة لأجهزة XLA التي يتصل بها. إذا تم استخدام SPMD، يتم ترجمة الكود مرة واحدة فقط (لأشكال وحسابات معينة) على كل مضيف لجميع الأجهزة.
 
 ![img](_static/img/pytorchXLA_flow.svg)
 
-For more details and examples, please refer to the [LazyTensor guide](https://pytorch.org/blog/understanding-lazytensor-system-performance-with-pytorch-xla-on-cloud-tpu/).
+للحصول على مزيد من التفاصيل والأمثلة، يُرجى الرجوع إلى [دليل LazyTensor](https://pytorch.org/blog/understanding-lazytensor-system-performance-with-pytorch-xla-on-cloud-tpu/).
 
-The operations in the IR graph are executed only when values of tensors are needed. This is referred to as evaluation or materialization of tensors. Sometimes this is also called lazy evaluation and it can lead to significant [performance improvements](https://arxiv.org/pdf/2102.13267.pdf).
+يتم تنفيذ العمليات في رسم IR فقط عندما تكون قيم الموترات مطلوبة. يُشار إلى ذلك باسم تقييم أو ماديّة الموترات. يُطلق على ذلك أحيانًا التقييم الكسول، ويمكن أن يؤدي إلى تحسينات كبيرة في [الأداء](https://arxiv.org/pdf/2102.13267.pdf).
 
-The _synchronous_ operations in Pytorch XLA, like printing, logging, checkpointing or callbacks  block tracing and result in slower execution. In the case when an operation requires a specific value of an XLA tensor, e.g. `print(xla_tensor_z)`, tracing is blocked until the value of that tensor is available to the host. Note that only the part of the graph responsible for computing that tensor value is executed. These operations do not cut the IR graph, but they trigger host-device communication through `TransferFromDevice`, which results in slower performance.
+تعمل العمليات المتزامنة في Pytorch XLA، مثل الطباعة أو التسجيل أو نقاط التفتيش أو الاستدعاءات، على حظر التتبع وتؤدي إلى إبطاء التنفيذ. في حالة احتياج عملية إلى قيمة محددة لموتر XLA، مثل `print(xla_tensor_z)`، يتم حظر التتبع حتى تتوفر قيمة الموتر للمضيف. لاحظ أنه يتم تنفيذ جزء الرسم البياني المسؤول عن حساب قيمة الموتر فقط. لا تقطع هذه العمليات رسم IR، ولكنها تؤدي إلى اتصال المضيف بالجهاز من خلال `TransferFromDevice`، مما يؤدي إلى إبطاء الأداء.
 
-A _barrier_ is a special instruction that tells XLA to execute the IR graph and materialize the tensors. This means that the PyTorch XLA tensors will be evaluated, and the results will be available to the host. The user-exposed barrier in Pytorch XLA is [xm.mark_step()](https://github.com/pytorch/xla/blob/bdceee54eca1269ee954f6cdd1868c584d0e88a4/torch_xla/core/xla_model.py#L808), which  breaks the IR graph and results in code execution on the XLA devices. One of the key properties of `xm.mark_step` is that unlike synchronous operations it does not block the further tracing while the device is executing the graph. However, it does block access to the values of the tensors that are being materialized.
+الحاجز هو تعليمات خاصة تخبر XLA بتنفيذ رسم IR وإضفاء الطابع المادي على الموترات. وهذا يعني أن موترات PyTorch XLA سيتم تقييمها، وستكون النتائج متاحة للمضيف. الحاجز المعرض للمستخدم في Pytorch XLA هو [xm.mark_step()](https://github.com/pytorch/xla/blob/bdceee54eca1269ee954f6cdd1868c584d0e88a4/torch_xla/core/xla_model.py#L808)، والذي يكسر رسم IR ويؤدي إلى تنفيذ الكود على أجهزة XLA. إحدى الخصائص الرئيسية لـ `xm.mark_step` هي أنه، على عكس العمليات المتزامنة، لا يحظر التتبع الإضافي أثناء تنفيذ الجهاز للرسم البياني. ومع ذلك، فهو يحظر الوصول إلى قيم الموترات التي يتم إضفاء الطابع المادي عليها.
 
-The example in the LazyTensor guide illustrates what happens in a simple case of adding two tensors. Now, suppose we have a for loop that adds XLA tensors and uses the value later:
+يوضح المثال في دليل LazyTensor ما يحدث في حالة بسيطة تتمثل في إضافة موترين. الآن، لنفترض أن لدينا حلقة for تضيف موترات XLA وتستخدم القيمة لاحقًا:
 
-```
+```py
 for x, y in tensors_on_device:
-    z += x + y
+  z += x + y
 ```
 
-Without a barrier, the Python tracing will result in a single graph that wraps the addition of tensors `len(tensors_on_device)` times. This is because the `for` loop is not captured by the tracing, so each iteration of the loop will create a new  subgraph corresponding to the computation of `z += x+y` and add it to the graph. Here is an example when `len(tensors_on_device)=3`.
+بدون حاجز، سيؤدي التتبع في Python إلى رسم بياني واحد يلف إضافة الموترات `len(tensors_on_device)` مرات. ويرجع ذلك إلى أن حلقة for لا يتم التقاطها بواسطة التتبع، لذا فإن كل تكرار للحلقة سينشئ رسمًا بيانيًا فرعيًا جديدًا يقابل حساب `z += x+y` ويضيفه إلى الرسم البياني. إليك مثال عندما `len(tensors_on_device)=3`.
 
 ![img](_static/img/IRgraph_no_markstep.png)
 
-However, introducing a barrier at the end of the loop will result in a smaller graph that will be compiled once during the first pass inside the `for` loop and will be reused for the next  `len(tensors_on_device)-1 ` iterations. The barrier will signal to the tracing that the graph traced so far can be submitted for execution, and if that graph has been seen before, a cached compiled program will be reused.
+ومع ذلك، فإن إضافة حاجز في نهاية الحلقة سينتج عنه رسم بياني أصغر يتم ترجمته مرة واحدة أثناء المرور الأول داخل حلقة for وسيتم إعادة استخدامه للمرات التالية `len(tensors_on_device)-1` مرات. سيؤدي الحاجز إلى إرسال إشارة إلى التتبع مفادها أنه يمكن تقديم الرسم البياني الذي تم تتبعه حتى الآن للتنفيذ، وإذا تم رؤية هذا الرسم البياني من قبل، فسيتم إعادة استخدام برنامج مجمع تم تخزينه مؤقتًا.
 
-```
+```py
 for x, y in tensors_on_device:
-    z += x + y
-    xm.mark_step()
+  z += x + y
+  xm.mark_step()
 ```
 
-In this case there will be a small graph that is used `len(tensors_on_device)=3` times.
+في هذه الحالة، سيكون هناك رسم بياني صغير يستخدم `len(tensors_on_device)=3` مرات.
 
 ![img](_static/img/IRgraph_markstep.png)
 
-It is important to highlight that in PyTorch XLA Python code inside for loops is traced and a new graph is constructed for each iteration if there is a barrier at the end. This can be a significant performance bottleneck.
+من المهم تسليط الضوء على أنه في PyTorch XLA يتم تتبع كود Python داخل حلقات for ويتم إنشاء رسم بياني جديد لكل تكرار إذا كان هناك حاجز في النهاية. يمكن أن يكون هذا عنق زجاجة كبير للأداء.
 
-The XLA graphs can be reused when the same computation happens on the same shapes of tensors. If the shapes of the inputs or intermediate tensors change, then the XLA compiler will recompile a new graph with the new tensor shapes. This means that if you have dynamic shapes or if your code does not reuse tensor graphs, running your model on XLA will not be suitable for that use case. Padding the input into a fixed shape can be an option to help avoid dynamic shapes. Otherwise, a significant amount of time will be spent by the compiler on optimizing and fusing operations which will not be used again.
+يمكن إعادة استخدام رسوم XLA عندما يحدث نفس الحساب على نفس أشكال الموترات. إذا تغيرت أشكال المدخلات أو الموترات الوسيطة، فسيقوم مترجم XLA بإعادة ترجمة رسم بياني جديد بأشكال موترات جديدة. وهذا يعني أنه إذا كان لديك أشكال ديناميكية أو إذا لم يعيد كودك استخدام رسوم الموترات، فإن تشغيل نموذجك على XLA لن يكون مناسبًا لتلك الحالة. يمكن أن يكون حشو الإدخال إلى شكل ثابت خيارًا للمساعدة في تجنب الأشكال الديناميكية. وإلا، سيقضي المترجم قدرًا كبيرًا من الوقت في تحسين ودمج العمليات التي لن يتم استخدامها مرة أخرى.
 
-The trade-off between graph size and compilation time is also important to consider. If there is one large IR graph, the XLA compiler can spend a lot of time on optimization and fusion of the ops. This can result in a very long compilation time. However, the later execution may be much faster, due to the optimizations that were performed during compilation.
+من المهم أيضًا مراعاة المقايضة بين حجم الرسم البياني ووقت الترجمة. إذا كان هناك رسم بياني IR كبير واحد، فقد يقضي مترجم XLA الكثير من الوقت في تحسين ودمج العمليات. قد يؤدي ذلك إلى وقت ترجمة طويل للغاية. ومع ذلك، قد يكون التنفيذ اللاحق أسرع بكثير، وذلك بفضل التحسينات التي تم إجراؤها أثناء الترجمة.
 
-Sometimes it is worth breaking the IR graph with `xm.mark_step()`. As explained above, this will result in a smaller graph that can be reused later. However making graphs smaller can reduce optimizations that otherwise could be done by the XLA compiler.
+في بعض الأحيان، يكون من المفيد كسر رسم IR باستخدام `xm.mark_step()`. كما هو موضح أعلاه، سيؤدي هذا إلى رسم بياني أصغر يمكن إعادة استخدامه لاحقًا. ومع ذلك، فإن جعل الرسوم البيانية أصغر يمكن أن يقلل من التحسينات التي يمكن أن يقوم بها مترجم XLA.
 
-Another important point to consider is [MPDeviceLoader](https://github.com/pytorch/xla/blob/a1f822e2627a5639464273241821852677401026/torch_xla/distributed/parallel_loader.py#L186). Once your code is running on an XLA device, consider wrapping the torch dataloader with XLA `MPDeviceLoader` which preloads data to the device to improve performance and includes `xm.mark_step()` in it. The latter automatically breaks the iterations over batches of data and sends them for execution. Note, if you are not using MPDeviceLoader, you might need to set `barrier=True` in the `optimizer_step()` to enable `xm.mark_step()` if running a training job or explicitly adding `xm.mark_step()`.
+نقطة أخرى مهمة يجب مراعاتها هي [MPDeviceLoader](https://github.com/pytorch/xla/blob/a1f822e2627a5639464273241821852677401026/torch_xla/distributed/parallel_loader.py#L186). بمجرد تشغيل الكود على جهاز XLA، فكر في لف برنامج تحميل البيانات في PyTorch باستخدام XLA `MPDeviceLoader` الذي يحمل مسبقًا البيانات إلى الجهاز لتحسين الأداء ويتضمن `xm.mark_step()` فيه. يؤدي الأخير تلقائيًا إلى كسر التكرارات عبر دفعات البيانات وإرسالها للتنفيذ. لاحظ أنه إذا كنت لا تستخدم MPDeviceLoader، فقد تحتاج إلى تعيين `barrier=True` في `optimizer_step()` لتمكين `xm.mark_step()` إذا كنت تقوم بتشغيل مهمة تدريب أو إضافة `xm.mark_step()` بشكل صريح.
 
-# TPU Setup
-Create TPU with base image to use nightly wheels or from the stable release by specifying the `RUNTIME_VERSION`.
+# إعداد TPU
+قم بإنشاء TPU باستخدام صورة أساسية لاستخدام العجلات الليلية أو من الإصدار الثابت عن طريق تحديد `RUNTIME_VERSION`.
+
 ```
 export ZONE=us-central2-b
 export PROJECT_ID=your-project-id
@@ -72,7 +66,7 @@ gcloud compute tpus tpu-vm create ${TPU_NAME} \
 --subnetwork=tpusubnet
 ```
 
-If you have a single host VM (e.g. v4-8), you can ssh to your vm and run the following commands from the vm directly. Otherwise, in case of TPU pods, you can use `--worker=all --command=""` similar to
+إذا كان لديك آلة افتراضية مضيفة واحدة (مثل v4-8)، فيمكنك الاتصال بالآلة الافتراضية الخاصة بك عبر SSH وتشغيل الأوامر التالية من الآلة الافتراضية مباشرة. في حالة وحدات TPU ذات البود، يمكنك استخدام `--worker=all --command=""` مشابه لما يلي
 
 ```
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
@@ -81,67 +75,64 @@ gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
 --command="pip3 install https://storage.googleapis.com/pytorch-xla-releases/wheels/tpuvm/torch-nightly-cp38-cp38-linux_x86_64.whl"
 ```
 
-Next, if you are using base image, install nightly packages  and required libraries
+بعد ذلك، إذا كنت تستخدم الصورة الأساسية، فقم بتثبيت الحزم الليلية والمكتبات المطلوبة
 
 ```
 pip3 install https://storage.googleapis.com/pytorch-xla-releases/wheels/tpuvm/torch-nightly-cp38-cp38-linux_x86_64.whl
-​​pip3 install https://storage.googleapis.com/pytorch-xla-releases/wheels/tpuvm/torch_xla-nightly-cp38-cp38-linux_x86_64.whl
+pip3 install https://storage.googleapis.com/pytorch-xla-releases/wheels/tpuvm/torch_xla-nightly-cp38-cp38-linux_x86_64.whl
 sudo apt-get install libopenblas-dev -y
 
-sudo apt-get update && sudo apt-get install libgl1 -y # diffusion specific
+sudo apt-get update && sudo apt-get install libgl1 -y # خاص بالانتشار
 ```
 
-# Converting code to PyTorch XLA
-General guidelines to modify your code:
-* Replace `cuda` with `xm.xla_device()`
-* Remove progress bar, printing that would access the XLA tensor values
-* Reduce logging and callbacks that would access the XLA tensor values
-* Wrap data loader with MPDeviceLoader
-* Profile to further optimize the code
+# تحويل الكود إلى PyTorch XLA
+المبادئ التوجيهية العامة لتعديل كودك:
+* استبدل `cuda` بـ `xm.xla_device()`
+* إزالة شريط التقدم، والطباعة التي من شأنها الوصول إلى قيم موتر XLA
+* تقليل التسجيل والاستدعاءات التي من شأنها الوصول إلى قيم موتر XLA
+* لف برنامج تحميل البيانات باستخدام MPDeviceLoader
+* إنشاء ملف تعريف لتحسين الكود بشكل أكبر
 
-Remember: each case is unique so you might need to do something different for each case.
+تذكر: كل حالة فريدة، لذلك قد تحتاج إلى القيام بشيء مختلف لكل حالة.
 
-# Example 1. Stable Diffusion inference in PyTorch Lightning on a Single TPU Device
+# المثال 1. استنتاج الانتشار المستقر في PyTorch Lightning على جهاز TPU واحد
+كمثال أول، ضع في اعتبارك [كود الاستدلال](https://github.com/pytorch-tpu/stable-diffusion/blob/main/scripts/txt2img.py) لنموذج الانتشار المستقر في PyTorch Lightning الذي يمكن تشغيله من سطر الأوامر على النحو التالي
 
-As a first example consider the [inference code](https://github.com/pytorch-tpu/stable-diffusion/blob/main/scripts/txt2img.py) of the stable diffusion model in PyTorch Lightning which can be run from command line as
 ```
 python scripts/txt2img.py --prompt "a photograph of an astronaut riding a horse"
 ```
 
-For your reference, the diff of modifications described below can be found [here](https://github.com/pytorch-tpu/stable-diffusion/commit/57f398eb784387e244dc5fb78421aa5261abd1ef). Let's go over them step by step.
-As in the general guideline above, start with changes related to `cuda` device. This inference code is written to run on GPUs and `cuda` can be found in multiple places. Start making changes by removing  `model.cuda()` from [this line](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L64), and `precision_scope` from [here](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L290). Additionally, replace the `cuda` device in [this line](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L248) with the `xla` device similar to the code below:
+للاطلاع، يمكن العثور على الفرق في التعديلات الموضحة أدناه [هنا](https://github.com/pytorch-tpu/stable-diffusion/commit/57f398eb784387e244dc5fb78421aa5261abd1ef). دعنا نمر عليها خطوة بخطوة.
 
-Next, this particular configuration of the model is using `FrozenCLIPEmbedder`, therefore we will modify this [line](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/ldm/modules/encoders/modules.py#L143) as well. For simplicity we will directly define the `device` in this tutorial, but you can pass the `device` value to the function as well.
+كما هو موضح في المبدأ التوجيهي العام أعلاه، ابدأ بالتغييرات المتعلقة بجهاز `cuda`. تم كتابة كود الاستدلال هذا لتشغيله على وحدات معالجة الرسوميات ويمكن العثور على `cuda` في أماكن متعددة. ابدأ بإجراء التغييرات عن طريق إزالة `model.cuda()` من [هذا السطر](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L64)، و`precision_scope` من [هنا](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L290). بالإضافة إلى ذلك، استبدل جهاز `cuda` في [هذا السطر](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/scripts/txt2img.py#L248) بجهاز `xla` مشابه للكود أدناه:
+
+بعد ذلك، يستخدم هذا التكوين الخاص بالنموذج `FrozenCLIPEmbedder`، لذلك سنعدل هذا [السطر](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/ldm/modules/encoders/modules.py#L143) أيضًا. لمزيد من البساطة، سنحدد `device` مباشرة في هذا البرنامج التعليمي، ولكن يمكنك تمرير قيمة `device` إلى الدالة أيضًا.
+
 ```
 import torch_xla.core.xla_model as xm
 self.device = xm.xla_device()
 ```
 
-Another place in the code that has cuda specific code is DDIM scheduler. Add `import torch_xla.core.xla_model as xm` on top of the file then replace [these](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/ldm/models/diffusion/ddim.py#L21-L22) lines
-
+مكان آخر في الكود يحتوي على كود محدد لـ cuda هو جدول DDIM. أضف `استيراد torch_xla.core.xla_model كما xm` أعلى الملف ثم استبدل [هذه](https://github.com/pytorch-tpu/stable-diffusion/blob/978da4c625a712a01ee066d019a0b0d2319cd8b3/ldm/models/diffusion/ddim.py#L21-L22) الأسطر
 
 ```
 if attr.device != torch.device("cuda"):
    attr = attr.to(torch.device("cuda"))
 ```
 
-with
+مع
 
 ```
 device = xm.xla_device()
 attr = attr.to(torch.device(device))
 ```
 
-Next, you can reduce device (TPU) and host (CPU) communication by removing print statements, disabling progress bars, and reducing or removing callbacks and logging. These operations require the device to stop executing, falling back to the CPU, executing the logging/callbacks, and then returning to the device. This can be a significant performance bottleneck, especially on large models.
+بعد ذلك، يمكنك تقليل الاتصال بين الجهاز (TPU) والمضيف (وحدة المعالجة المركزية) عن طريق إزالة عبارات الطباعة، وتعطيل أشرطة التقدم، وتقليل الاستدعاءات أو إزالتها والتسجيل. تتطلب هذه العمليات من الجهاز التوقف عن التنفيذ، والعودة إلى وحدة المعالجة المركزية، وتنفيذ التسجيل/الاستدعاءات، ثم العودة إلى الجهاز. يمكن أن يكون هذا عنق زجاجة كبير للأداء، خاصة في النماذج الكبيرة.
 
-After making these changes, the code will run on TPUs. However, the performance will be very slow. This is because the XLA compiler tries to build a single (huge) graph that wraps the number of inference steps (in this case, 50) as there is no barrier inside the for loop. It is difficult for the compiler to optimize the graph, and this leads to significant performance degradation. As discussed above, breaking the for loop with the barrier (xm.mark_step()) will result in a smaller graph that is  easier for the compiler to optimize. This will also allow the compiler to reuse the graph from the previous step, which can improve performance.
+بعد إجراء هذه التغييرات، سيعمل الكود على وحدات TPU. ومع ذلك، سيكون الأداء بطيئًا جدًا. ويرجع ذلك إلى أن مترجم XLA يحاول بناء رسم بياني واحد (ضخم) يلف عدد خطوات الاستدلال (في هذه الحالة، 50) نظرًا لعدم وجود حاجز داخل حلقة for. من الصعب على المترجم تحسين الرسم البياني، مما يؤدي إلى تدهور كبير في الأداء. كما نوقش أعلاه، فإن كسر حلقة for بالحاجز (xm.mark_step()) سينتج عنه رسم بياني أصغر يمكن للمترجم تحسينه بسهولة أكبر. سيسمح هذا أيضًا للمترجم بإعادة استخدام الرسم البياني من الخطوة السابقة، مما قد يحسن
+# مثال 2. الاستدلال باستخدام Stable Diffusion من Hugging Face
 
-Now the [code](https://github.com/pytorch-tpu/stable-diffusion/blob/ss-inference/scripts/txt2img.py) is ready to run on TPUs in a reasonable time. More optimization and analysis can be done by [capturing a profile](https://cloud.google.com/tpu/docs/pytorch-xla-performance-profiling-tpu-vm) and investigating further. However, this is not covered here.
-
-Note: if you are running on v4-8 TPU, then you have 4 available XLA (TPU) devices. Running the code as above will only use one XLA device. In order to run on all 4 devices you need to use `torch_xla.launch()` function to spawn the code on all the devices. We will discuss a `torch_xla.launch` in the next example.
-
-# Example 2. HF Stable Diffusion Inference
-Now, consider using [Stable Diffusion Inference](https://github.com/huggingface/diffusers/tree/main/examples/text_to_image) in the HuggingFace diffusers library for both the SD-XL and 2.1 versions of the model. For your reference, the changes described below can be found in this [repo](https://github.com/pytorch-tpu/diffusers). You can clone the repo and run the inference using the following command on your TPU VM:
+الآن، لنأخذ في الاعتبار استخدام [الاستدلال باستخدام Stable Diffusion](https://github.com/huggingface/diffusers/tree/main/examples/text_to_image) من مكتبة HuggingFace diffusers لكل من إصداري SD-XL و2.1 من النموذج. للرجوع، يمكن العثور على التغييرات الموضحة أدناه في هذا [المستودع](https://github.com/pytorch-tpu/diffusers). يمكنك استنساخ المستودع وتشغيل الاستدلال باستخدام الأمر التالي على جهاز TPU الظاهري:
 
 ```
 (vm)$ git clone https://github.com/pytorch-tpu/diffusers.git
@@ -149,11 +140,12 @@ Now, consider using [Stable Diffusion Inference](https://github.com/huggingface/
 (vm)$ python3 inference_tpu_single_device.py
 ```
 
-# Running on a Single TPU device
+# التشغيل على جهاز TPU واحد
 
-This section describes the changes that need to be made to the [text_to_image inference example](https://github.com/huggingface/diffusers/tree/main/examples/text_to_image#inference) code to run it on TPUs.
+يصف هذا القسم التغييرات التي يجب إجراؤها على [رمز مثال الاستدلال text_to_image](https://github.com/huggingface/diffusers/tree/main/examples/text_to_image#inference) لتشغيله على وحدات معالجة Tensor Processing Units (TPUs).
 
-The original code uses Lora for inference, but this tutorial will not use it. Instead, we will set the `model_id` argument to `stabilityai/stable-diffusion-xl-base-0.9` when initializing the pipeline. We will also use the default scheduler (DPMSolverMultistepScheduler). However, similar changes can be made to the other schedulers as well.
+يستخدم الكود الأصلي Lora للاستدلال، ولكن هذا البرنامج التعليمي لن يستخدمه. بدلاً من ذلك، سنقوم بتعيين وسيط `model_id` إلى `stabilityai/stable-diffusion-xl-base-0.9` عند تهيئة الأنبوب. كما سنستخدم المخطط الافتراضي (DPMSolverMultistepScheduler). ومع ذلك، يمكن إجراء تغييرات مماثلة على المخططات الأخرى أيضًا.
+
 ```
 git clone https://github.com/huggingface/diffusers
 cd diffusers
@@ -163,14 +155,16 @@ cd examples/text_to_image/
 pip install -r requirements.txt
 pip install invisible_watermark transformers accelerate safetensors
 ```
-(If `accelerate` is not found, log out, log back in.)
 
-Log in to HF and agree to the [sd-xl 0.9 license](https://huggingface.co/stabilityai/stable-diffusion-xl-base-0.9) on the model card. Next, go to  [account→settings→access](https://huggingface.co/settings/tokens) token and generate a new token. Copy the token and run the following command with that specific token value on your vm
+(إذا لم يتم العثور على `accelerate`، فقم بتسجيل الخروج، ثم سجل الدخول مرة أخرى.)
+
+سجل الدخول إلى حسابك على Hugging Face ووافق على [رخصة sd-xl 0.9](https://huggingface.co/stabilityai/stable-diffusion-xl-base-0.9) على بطاقة النموذج. بعد ذلك، انتقل إلى [علامة تبويب الرموز المميزة للوصول إلى الإعدادات](https://huggingface.co/settings/tokens) وقم بتوليد رمز مميز جديد. انسخ الرمز المميز وقم بتشغيل الأمر التالي مع قيمة الرمز المميز المحددة على جهازك الظاهري:
+
 ```
 (vm)$ huggingface-cli login --token _your_copied_token__
 ```
 
-The HuggingFace readme provides PyTorch code that is written to run on GPUs. To run it on TPUs, the first step is to change the CUDA device to an XLA device. This can be done by replacing the line `pipe.to("cuda")` with the following lines:
+توفر قراءة Hugging Face رمز PyTorch مكتوبًا للتشغيل على وحدات معالجة الرسوميات (GPU). لتشغيله على TPUs، تتمثل الخطوة الأولى في تغيير جهاز CUDA إلى جهاز XLA. يمكن القيام بذلك عن طريق استبدال السطر `pipe.to("cuda")` بالأسطر التالية:
 
 ```
 import torch_xla.core.xla_model as xm
@@ -178,61 +172,60 @@ device = xm.xla_device()
 pipe.to(device)
 ```
 
-Additionally, it is important to note that the first time you run inference with XLA, it will take a long time to compile. For example, compilation time for stable diffusion XL model inference from HuggingFace can take about an hour to compile, whereas the actual inference may take only 5 seconds, depending on the batch size. Likewise, a GPT-2 model can take about 10-15 mins to compile, after which the training epoch time becomes much faster. This is because XLA builds a graph of the computation that will be performed, and then optimizes this graph for the specific hardware that it is running on. However, once the graph has been compiled, it can be reused for subsequent inferences, which will be much faster. Therefore, if you are only running inference once, you may not benefit from using XLA. However, if you are running inference multiple times, or if you are running inference on a list of prompts, you will start to see the advantages of XLA after the first few inferences. For example, if you run inference on a list of 10 prompts, the first inference (maybe two[^1]) may take a long time to compile, but the remaining inference steps will be much faster. This is because XLA will reuse the graph that it compiled for the first inference.
+بالإضافة إلى ذلك، من المهم ملاحظة أن عملية الاستدلال الأولى باستخدام XLA ستستغرق وقتًا طويلاً للتجميع. على سبيل المثال، قد تستغرق عملية تجميع الاستدلال لنموذج Stable Diffusion XL من Hugging Face حوالي ساعة، في حين أن الاستدلال الفعلي قد يستغرق 5 ثوانٍ فقط، وذلك حسب حجم الدفعة. وبالمثل، قد يستغرق نموذج GPT-2 حوالي 10-15 دقيقة للتجميع، وبعد ذلك يصبح وقت حقبة التدريب أسرع بكثير. ويرجع ذلك إلى أن XLA تبني رسمًا بيانيًا للحساب الذي سيتم إجراؤه، ثم تحسن هذا الرسم البياني للأجهزة المحددة التي تعمل عليها. ومع ذلك، بمجرد تجميع الرسم البياني، يمكن إعادة استخدامه للاستدلالات اللاحقة، والتي ستكون أسرع بكثير. لذلك، إذا كنت تشغل الاستدلال مرة واحدة فقط، فقد لا تستفيد من استخدام XLA. ومع ذلك، إذا كنت تشغل الاستدلال عدة مرات، أو إذا كنت تشغل الاستدلال على قائمة من المطالبات، فستبدأ في رؤية مزايا XLA بعد الاستدلالات القليلة الأولى. على سبيل المثال، إذا قمت بتشغيل الاستدلال على قائمة من 10 مطالبات، فقد تستغرق عملية الاستدلال الأولى (وربما اثنتين [^1]) وقتًا طويلاً للتجميع، ولكن خطوات الاستدلال المتبقية ستكون أسرع بكثير. ويرجع ذلك إلى أن XLA ستعيد استخدام الرسم البياني الذي تم تجميعه للاستدلال الأول.
 
-If you try to run the code without making any additional changes, you will notice that the compilation time is very long (>6 hours). This is because the XLA compiler tries to build a single graph for all of the scheduler steps at once similar to what we have discussed in the previous example. To make the code run faster, we need to break the graph up into smaller pieces with `xm.mark_step()` and reuse them in the next steps. This happens inside the `pipe.__call__` [function](https://github.com/huggingface/diffusers/blob/2b1786735e27bc97f4d4699712292d5c463a7380/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L559) in [these lines](https://github.com/huggingface/diffusers/blob/2b1786735e27bc97f4d4699712292d5c463a7380/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L805-L839). Disabling the progress bar, removing callbacks and adding `xm.mark_step()` at the end of the for loop speeds up the code significantly. Changes are provided in this [commit](https://github.com/huggingface/diffusers/compare/main...pytorch-tpu:diffusers:main).
+إذا حاولت تشغيل الكود دون إجراء أي تغييرات إضافية، فستلاحظ أن وقت التجميع طويل جدًا (>6 ساعات). ويرجع ذلك إلى أن مترجم XLA يحاول بناء رسم بياني واحد لجميع خطوات المخطط في وقت واحد، على غرار ما ناقشناه في المثال السابق. لجعل الكود يعمل بشكل أسرع، نحتاج إلى تقسيم الرسم البياني إلى قطع أصغر باستخدام `xm.mark_step()` وإعادة استخدامها في الخطوات التالية. يحدث هذا داخل دالة `pipe.__call__` [function](https://github.com/huggingface/diffusers/blob/2b1786735e27bc97f4d4699712292d5c463a7380/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L559) في [هذه الأسطر](https://github.com/huggingface/diffusers/blob/2b1786735e2ORwbc97f4d4699712292d5c463a7380/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L805-L839). يؤدي تعطيل شريط التقدم وإزالة الاستدعاءات وإضافة `xm.mark_step()` في نهاية حلقة for إلى تسريع الكود بشكل كبير. تتوفر التغييرات في هذا [الالتزام](https://github.com/huggingface/diffusers/compare/main...pytorch-tpu:diffusers:main).
 
+بالإضافة إلى ذلك، فإن دالة `self.scheduler.step()`، التي تستخدم بشكل افتراضي المخطط DPMSolverMultistepScheduler، بها بعض المشكلات الموضحة في
+[تحذيرات PyTorch XLA](https://pytorch.org/xla/release/2.0/index.html#known-performance-caveats). تؤدي استدعاءات `.nonzero()` و`.item()` في هذه الدالة إلى إرسال طلبات إلى وحدة المعالجة المركزية لتقييم المصفوفة، والتي تؤدي إلى الاتصال بين الجهاز والمضيف. هذا غير مرغوب فيه، لأنه يمكن أن يبطئ الكود. في هذه الحالة، يمكننا تجنب هذه الاستدعاءات عن طريق تمرير الفهرس إلى الدالة مباشرةً. سيمنع هذا الدالة من إرسال طلبات إلى وحدة المعالجة المركزية، وسيحسن أداء الكود. تتوفر التغييرات في [هذا](https://github.com/pytorch-tpu/diffusers/commit/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d) الالتزام. الكود الآن جاهز للتشغيل على TPUs.
 
-Additionally, the `self.scheduler.step()` function, which by default uses the DPMSolverMultistepScheduler scheduler, has a few issues that are described in the
-[PyTorch XLA caveats](https://pytorch.org/xla/release/2.0/index.html#known-performance-caveats). The `.nonzero()` and `.item()` calls in this function send requests to the CPU for tensor evaluation, which trigger device-host communication. This is not desirable, as it can slow down the code. In this particular case, we can avoid these calls by passing the index to the function directly. This will prevent the function from sending requests to the CPU, and will improve the performance of the code. Changes are available in [this](https://github.com/pytorch-tpu/diffusers/commit/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d) commit. The code now is ready to be run on TPUs.
+[^1]: 0 و1 هي أرقام سحرية في XLA ويعاملان كثوابت في HLO. لذا، إذا كان هناك مولد رقم عشوائي في الكود يمكنه توليد هذه القيم، فسيتم تجميع الكود لكل قيمة بشكل منفصل. يمكن تعطيل هذا باستخدام متغير البيئة `XLA_NO_SPECIAL_SCALARS=1`.
 
-[^1]: 0 and 1 are magic numbers in XLA and treated as constants in the HLO. So if there is a random number generator in the code that can generate these values, the code will compile for each value separately. This can be disabled with `XLA_NO_SPECIAL_SCALARS=1` environment variable.
+# التوصيف وتحليل الأداء
 
+للمزيد من التحقيق في أداء النموذج، يمكننا توصيفه باستخدام دليل التوصيف [guide](https://cloud.google.com/tpu/docs/pytorch-xla-performance-profiling-tpu-vm). كقاعدة عامة، يجب تشغيل نص التوصيف البرمجي بحجم دفعة أقصى يناسب الذاكرة من أجل [الاستخدام الأمثل للذاكرة](https://cloud.google.com/tpu/docs/performance-guide). كما يساعد في تداخل تتبع الكود مع تنفيذ الجهاز، مما يؤدي إلى استخدام الجهاز بشكل أكثر مثالية. يجب أن تكون مدة التوصيف طويلة بما يكفي لالتقاط خطوة واحدة على الأقل. يعني الأداء الجيد للنموذج على TPUs أن الاتصال بين الجهاز والمضيف يتم تقليله إلى الحد الأدنى وأن الجهاز يعمل باستمرار دون وقت خامل.
 
-# Profiling and performance analysis
+بدء خادم في ملف `inference_tpu_*.py` وتشغيل نص برمجي `capture_profile.py` كما هو موضح في الدليل سيوفر لنا معلومات حول العمليات التي تعمل على الأجهزة. حاليًا، يتم توصيف جهاز XLA واحد فقط. لفهم وقت الخمول لجهاز TPU (الفجوات في التوصيف)، يجب إضافة آثار التوصيف (`xp.Trace()`) إلى الكود. تقيس `xp.Trace()` الوقت الذي يستغرقه تتبع الكود Python على جهاز الكمبيوتر المضيف الملفوف مع التتبع. في هذا المثال، تم إضافة آثار `xp.Trace()` داخل [الأنبوب](https://github.com/ssusie/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py) و [نموذج U-net](https://github.com/ssusie/diffusers/blob/main/src/diffusers/models/unet_2d_condition.py) لقياس الوقت اللازم لتشغيل أقسام محددة من الكود على المضيف (CPU).
 
-To further investigate the performance of the model, we can profile it using the profiling [guide](https://cloud.google.com/tpu/docs/pytorch-xla-performance-profiling-tpu-vm). As a rule of thumb, the profiling script should be run with the maximum batch size that fits into the memory for [optimal memory usage](https://cloud.google.com/tpu/docs/performance-guide). It also helps to overlap tracing of the code with device execution which leads to more optimal device usage. The duration of profiling should be long enough to capture at least one step. Good performance of the model on TPUs means that device-host communication is minimized and the device is constantly running processes with no idle time.
+إذا كانت الفجوات في التوصيف ترجع إلى تتبع كود Python الذي يحدث على المضيف، فقد يكون ذلك عنق زجاجة ولا يوجد تحسين مباشر آخر يمكن القيام به. وإلا، يجب إجراء مزيد من التحليل للكود لفهم التحذيرات وتحسين الأداء بشكل أكبر. لاحظ أنه لا يمكنك لف `xp.Trace()` أجزاء من الكود حيث يتم استدعاء `xm.mark_step()`.
 
-Starting a server in the `inference_tpu_*.py` file and running `capture_profile.py` script as described in the guide will give us information on processes that run on the devices. Currently, only one XLA device is profiled. To better understand the TPU idle time (gaps in the profile), profiling traces (`xp.Trace()`) should be added to the code. The `xp.Trace()` measures the time it takes to trace the python code on the host machine wrapped with the trace. For this example, `xp.Trace()` traces were added inside the [pipeline](https://github.com/ssusie/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py) and the [U-net model](https://github.com/ssusie/diffusers/blob/main/src/diffusers/models/unet_2d_condition.py) to measure the time to run specific sections of the code on the host (CPU).
+لتوضيح ذلك، يمكننا النظر في ملفات التعريف التي تم التقاطها بالفعل والتي تم تحميلها إلى TensorBoard وفقًا لدليل التوصيف.
 
-If the gaps in the profile are due to Python code tracing that happens on the host, then this might be a bottleneck and there is no further straightforward optimization that can be done. Otherwise, the code should be analyzed further to understand the caveats and improve the performance further. Note that you cannot `xp.Trace()` wrap portions of the code where `xm.mark_step()` is called.
+بدءًا من إصدار Stable Diffusion model 2.1
 
-To illustrate this we can look at already captured profiles that were uploaded to tensorboard following the profiling guide.
+إذا قمنا بالتقاط ملف تعريف دون إدراج أي آثار، فسنرى ما يلي:
 
-Starting from Stable Diffusion model version 2.1
+![نص بديل](_static/img/image.png)
 
-If we capture a profile without inserting any traces, we will see the following:
+يبدو أن جهاز TPU الفردي على v4-8، والذي يحتوي على نواتين، مشغول. لا توجد فجوات كبيرة في استخدامها، باستثناء واحدة صغيرة في المنتصف. إذا قمنا بالتمرير لأعلى لمحاولة العثور على العملية التي تشغل جهاز الكمبيوتر المضيف، فلن نجد أي معلومات. لذلك، سنضيف `xp.traces` إلى ملف [الأنبوب](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py) وكذلك دالة [U-net](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/models/unet_2d_condition.py). قد لا يكون الأخير مفيدًا لهذه الحالة الاستخدامية بالذات، ولكنه يوضح كيف يمكن إضافة آثار في أماكن مختلفة وكيف يتم عرض معلوماتها في TensorBoard.
 
-![Alt text](_static/img/image.png)
+إذا أضفنا آثارًا وأعدنا التقاط ملف التعريف بحجم الدفعة الأكبر الذي يمكن أن يناسب الجهاز (32 في هذه الحالة)، فسنرى أن الفجوة في الجهاز تسببها عملية Python تعمل على جهاز الكمبيوتر المضيف.
 
-The single TPU device on v4-8, which has two cores, appears to be busy. There are no significant gaps in their usage, except for a small one in the middle. If we scroll up to try to find which process is occupying the host machine, we will not find any information. Therefore, we will add `xp.traces` to the pipeline [file](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py) as well as the U-net [function](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/models/unet_2d_condition.py). The latter may not be useful for this particular use case, but it does demonstrate how traces can be added in different places and how their information is displayed in TensorBoard.
+![نص بديل](_static/img/image-1.png)
+![نص بديل](_static/img/image-2.png)
 
-If we add traces and re-capture the profile with the largest batch size that can fit on the device (32 in this case), we will see that the gap in the device is caused by a Python process that is running on the host machine.
-![Alt text](_static/img/image-1.png)
-![Alt text](_static/img/image-2.png)
+يمكننا استخدام الأداة المناسبة للتكبير في الجدول الزمني ومعرفة العملية التي تعمل خلال تلك الفترة. هذا هو عندما يحدث تتبع كود Python على المضيف، ولا يمكننا تحسين التتبع أكثر من ذلك في هذه المرحلة.
 
-We can use the appropriate tool to zoom in on the timeline and see which process is running during that period. This is when the Python code tracing happens on the host, and we cannot improve the tracing further at this point.
+والآن، دعنا نلقي نظرة على إصدار XL من النموذج ونفعل الشيء نفسه. سنضيف آثارًا إلى ملف [الأنبوب](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py) بنفس الطريقة التي فعلناها للإصدار 2.1 ونلتقط ملف تعريف.
 
+![نص بديل](_static/img/image-4.png)
 
-Now, let's examine the XL version of the model and do the same thing. We will add traces to the pipeline [file](https://github.com/pytorch-tpu/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py) in the same way that we did for the 2.1 version and capture a profile.
+هذه المرة، بالإضافة إلى الفجوة الكبيرة في المنتصف، والتي تسببها `pipe_watermark` tracing، هناك العديد من الفجوات الصغيرة بين خطوات الاستدلال داخل [حلقة هذا](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L814-L830).
 
-![Alt text](_static/img/image-4.png)
+ألق نظرة فاحصة على الفجوة الكبيرة التي تسببها `pipe_watermark`. تسبق الفجوة عبارة `TransferFromDevice` والتي تشير إلى أن شيئًا ما يحدث على جهاز الكمبيوتر المضيف ينتظر اكتمال الحساب قبل المتابعة. بالنظر إلى كود العلامة المائية [code](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/pipelines/stable_diffusion_xl/watermark.py#L29)، يمكننا أن نرى أنه يتم نقل المصفوفات إلى وحدة المعالجة المركزية وتحويلها إلى مصفوفات Numpy من أجل معالجتها لاحقًا باستخدام مكتبات `cv2` و`pywt`. نظرًا لأن هذا الجزء ليس من السهل تحسينه، فسنتركه كما هو.
 
-This time, in addition to the large gap in the middle, which is caused by the `pipe_watermark` tracing, there are many small gaps between the inference steps within [this loop](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/pipelines/stable_diffusion_xl/pipeline_stable_diffusion_xl.py#L814-L830).
+والآن إذا قمنا بالتكبير على الحلقة، فيمكننا أن نرى أن الرسم البياني داخل الحلقة يتم تقسيمه إلى أجزاء أصغر لأن عملية `TransferFromDevice` تحدث.
 
-First look closer into the large gap that is caused by `pipe_watermark`. The gap is preceded with `TransferFromDevice` which indicates that something is happening on the host machine that is waiting for computation to finish before proceeding. Looking into watermark [code](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/pipelines/stable_diffusion_xl/watermark.py#L29), we can see that tensors are transferred to cpu and converted to numpy arrays in order to be processed with `cv2` and `pywt` libraries later. Since this part is not straightforward to optimize, we will leave this as is.
+![نص بديل](_static/img/image-3.png)
 
-Now if we zoom in on the loop, we can see that the graph within the loop is broken into smaller parts because the `TransferFromDevice` operation happens.
-![Alt text](_static/img/image-3.png)
+إذا قمنا بفحص دالة U-Net والمخطط، فيمكننا أن نرى أن كود U-Net لا يحتوي على أي أهداف تحسين لـ PyTorch/XLA. ومع ذلك، هناك استدعاءات `.item()` و`.nonzero()` داخل [المخطط.الخطوة](https://github.com/huggingface/diffusers/blob/15782fd506e8c4a7c2b288fc2e558bd77fdfa51a/src/diffusers/schedulers/scheduling_euler_discrete.py#L371). يمكننا [إعادة كتابة](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/schedulers/scheduling_euler_discrete.py#L310) الدالة لتجنب تلك الاستدعاءات. إذا قمنا بإصلاح هذه المشكلة وأعدنا تشغيل ملف التعريف، فلن نرى الكثير من الاختلاف. ومع ذلك، نظرًا لأننا قللنا من الاتصال بين الجهاز والمضيف الذي كان يقدم رسومًا بيانية أصغر، فقد سمحنا للمترجم بتحسين الكود بشكل أفضل. تحتوي دالة [scale_model_input](https://github.com/huggingface/diffusers/blob/15782fd506e8c4a7c2b288fc2e558bd77fdfa51a/src/diffusers/schedulers/scheduling_euler_discrete.py#L205) على مشكلات مماثلة، ويمكننا إصلاحها عن طريق إجراء التغييرات التي أجريناها أعلاه على دالة `step`. بشكل عام، نظرًا لأن العديد من الفجوات تسببها عملية تتبع كود المستوى Python وبناء الرسم البياني، فمن غير الممكن تحسين هذه الفجوات باستخدام الإصدار الحالي من PyTorch XLA، ولكن قد نرى تحسينات في المستقبل عندما يتم تمكين الدينامو في PyTorch XLA.
+: هذا الدليل يشرح كيفية تشغيل التعليمات البرمجية على أجهزة TPU متعددة وأجهزة TPU Pod.
 
+# التشغيل على أجهزة TPU متعددة
 
-If we investigate the U-Net function and the scheduler, we can see that the U-Net code does not contain any optimization targets for PyTorch/XLA. However, there are `.item()` and `.nonzero()` calls inside the [scheduler.step](https://github.com/huggingface/diffusers/blob/15782fd506e8c4a7c2b288fc2e558bd77fdfa51a/src/diffusers/schedulers/scheduling_euler_discrete.py#L371). We can [rewrite](https://github.com/pytorch-tpu/diffusers/blob/0243d2ef9c2c7bc06956bb1bcc92c23038f6519d/src/diffusers/schedulers/scheduling_euler_discrete.py#L310) the function to avoid those calls. If we fix this issue and rerun a profile, we will not see much difference. However, since we have reduced the device-host communication that was introducing smaller graphs, we allowed the compiler to optimize the code better. The function [scale_model_input](https://github.com/huggingface/diffusers/blob/15782fd506e8c4a7c2b288fc2e558bd77fdfa51a/src/diffusers/schedulers/scheduling_euler_discrete.py#L205) has similar issues, and  we can fix these by making the changes we made above to the  `step` function. Overall, since many of the gaps are caused from python level code tracing and graph building, these gaps are not possible to optimize with the current version of PyTorch XLA, but we may see improvements in the future when dynamo is enabled in PyTorch XLA.
+لاستخدام أجهزة TPU متعددة، يمكنك استخدام دالة `torch_xla.launch` لتشغيل الدالة التي قمت بتشغيلها على جهاز واحد إلى أجهزة متعددة. ستبدأ دالة `torch_xla.launch` العمليات على أجهزة TPU متعددة وتزامنها عند الحاجة. يمكن القيام بذلك عن طريق تمرير وسيط `index` إلى الدالة التي تعمل على جهاز واحد. على سبيل المثال،
 
-
-# Running on Multiple TPU Devices
-
-To use multiple TPU devices, you can use the `torch_xla.launch` function to spawn the function you ran on a single device to multiple devices. The `torch_xla.launch` function will start processes on multiple TPU devices and sync them when needed. This can be done by passing the `index` argument to the function that runs on a single device. For example,
-```
+```py
 import torch_xla
 
 def my_function(index):
@@ -241,17 +234,17 @@ def my_function(index):
 torch_xla.launch(my_function, args=(0,))
 ```
 
-In this example, the `my_function` function will be spawned on 4 TPU devices on v4-8, with each device being assigned an index from 0 to 3. Note that by default, the launch() function will spawn preocesses on all TPU devices. If you only want to run single process, set the argument `launch(..., debug_single_process=True)`.
+في هذا المثال، سيتم تشغيل دالة `my_function` على 4 أجهزة TPU على v4-8، مع تعيين فهرس لكل جهاز من 0 إلى 3. لاحظ أنه بشكل افتراضي، ستقوم دالة launch() بتشغيل العمليات على جميع أجهزة TPU. إذا كنت تريد تشغيل عملية واحدة فقط، فقم بتعيين وسيط `launch(..., debug_single_process=True)`.
 
-[This file](https://github.com/ssusie/diffusers/blob/main/examples/text_to_image/inference_tpu_multidevice.py) illustrates how xmp.spawn can be used to run stable diffusion 2.1 version on multiple TPU devices. For this version similar to the above changes were made to the [pipeline](https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py) file.
+يوضح [هذا الملف](https://github.com/ssusie/diffusers/blob/main/examples/text_to_image/inference_tpu_multidevice.py) كيفية استخدام xmp.spawn لتشغيل إصدار Stable Diffusion 2.1 على أجهزة TPU متعددة. بالنسبة لهذا الإصدار، تم إجراء تغييرات مماثلة على ملف [pipeline](https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/stable_diffusion/pipeline_stable_diffusion.py).
 
+# التشغيل على أجهزة TPU Pod
 
-# Running on Pods
-Once you have the code for running on a single host device, there is no further change needed. You can create the TPU pod, for example, by following these [instructions](https://cloud.google.com/tpu/docs/pytorch-pods#create-tpu-vm). Then run your script with
+بمجرد حصولك على التعليمات البرمجية للتشغيل على جهاز مضيف واحد، لا يلزم إجراء أي تغييرات إضافية. يمكنك إنشاء TPU Pod، على سبيل المثال، باتباع هذه [التعليمات](https://cloud.google.com/tpu/docs/pytorch-pods#create-tpu-vm). ثم قم بتشغيل البرنامج النصي الخاص بك باستخدام
+
 ```
 gcloud compute tpus tpu-vm ssh ${TPU_NAME} \
   --zone=${ZONE} \
   --worker=all \
   --command="python3 your_script.py"
 ```
-
