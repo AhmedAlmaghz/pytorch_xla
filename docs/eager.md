@@ -1,10 +1,11 @@
-# Eager Mode + Compile API
+## وضع Eager + واجهة برمجة تطبيقات Compile
 
-In this doc we will go over how to use PyTorch/XLA’s new experimental `eager` mode with the `compile` API. The goal is to make PyTorch/XLA experience more aligned with the native PyTorch and make development process easier.
+في هذه الوثيقة، سنشرح كيفية استخدام الوضع `Eager` التجريبي الجديد في PyTorch/XLA مع واجهة برمجة التطبيقات `Compile`. الهدف من ذلك هو جعل تجربة PyTorch/XLA أكثر توافقاً مع PyTorch الأصلي، وتسهيل عملية التطوير.
 
+## الخلفية
 
-## Background
-Currently PyTorch/XLA runs on the LazyTensor tracing mode by default. In the following code
+يعمل PyTorch/XLA حاليًا في وضع تتبع LazyTensor بشكل افتراضي. في الكود التالي:
+
 ```python
 import torch
 import torch_xla
@@ -14,56 +15,61 @@ device = torch_xla.device()
 model = torchvision.models.resnet18().to(device)
 input = torch.randn(64, 3, 224, 224).to(device)
 
-# model tracing
+# تتبع النموذج
 res = model(input)
 
-# model execution, same as `xm.mark_step`
+# تنفيذ النموذج، نفس xm.mark_step
 torch_xla.sync()
 ```
-The actual model compilation and device execution happens when `torch_xla.sync` is called. There are multiple drawback of this approach. 
 
-1. Users are often confused about when the framework is tracing and when the framework is executing.
-2. Non-core model code(data preprocessing for example) often generates some small pending execution that gets leaked into the main graph(step function) and causes recompilation. The recompilation of the whole graph is usually very expensive.
-3. It is hard to debug when/why recompilation happens.
+يحدث التجميع الفعلي للنموذج وتنفيذ الجهاز عند استدعاء `torch_xla.sync`. هناك العديد من العيوب لهذا النهج:
 
-To mitigate above issues we want to introduce the new UX with eager and compile.
+1. غالبًا ما يكون المستخدمون مرتبكين بشأن متى يقوم الإطار بالتتبع ومتى يقوم بالتنفيذ.
+2. غالبًا ما تقوم التعليمات البرمجية غير الأساسية للنموذج (مثل المعالجة المسبقة للبيانات) بتوليد بعض التنفيذات المعلقة الصغيرة التي تتسرب إلى الرسم البياني الرئيسي (دالة الخطوة) وتتسبب في إعادة التجميع. وعادة ما تكون إعادة تجميع الرسم البياني بالكامل مكلفة للغاية.
+3. من الصعب تصحيح الأخطاء عندما/لماذا تحدث إعادة التجميع.
 
-## Basic Usage
+للتغلب على هذه المشكلات، نريد تقديم تجربة المستخدم الجديدة مع `Eager` و `Compile`.
+
+## الاستخدام الأساسي
+
 ```python
 import torch
 import torch_xla
 import torchvision
 
-# Run ops eagerly by default
+# تشغيل العمليات في الوضع Eager بشكل افتراضي
 torch_xla.experimental.eager_mode(True)
 
 device = torch_xla.device()
 model = torchvision.models.resnet18().to(device)
 
-# Mark the function to be compiled
+# وضع علامة على الدالة ليتم تجميعها
 compiled_model = torch_xla.compile(model)
 input = torch.randn(64, 3, 224, 224).to(device)
 
-# Compilation and execution happens right away.
+# يحدث التجميع والتنفيذ على الفور.
 res = compiled_model(input)
 ```
-Note that
 
-1. Currently user has to manually enable the eager mode by `torch_xla.experimental.eager_mode(True)`.
-2. The region of the code that wants to be compiled should be wrapped by `torch_xla.compile`.
+يرجى ملاحظة ما يلي:
 
-The implementation of the `torch_xla.compile` is actually pretty straight forward, it disable the eager mode when entering the target function and start tracing. It will call the `torch_xla.sync()` when target function returns and reenable the eager mode. You can expect the same perfomrance by using the `eager` + `compile` API compared to the existing `mark_step/sync` approach.
+1. يجب على المستخدم حاليًا تمكين الوضع `Eager` يدويًا عن طريق `torch_xla.experimental.eager_mode(True)`.
+2. يجب لف الجزء من الكود الذي نريد تجميعه باستخدام `torch_xla.compile`.
 
+إن تنفيذ `torch_xla.compile` مباشر إلى حد ما، حيث يقوم بتعطيل الوضع `Eager` عند الدخول إلى الدالة الهدف ويبدأ في التتبع. وسوف يستدعي `torch_xla.sync()` عندما تعيد الدالة الهدف تمكين الوضع `Eager` مرة أخرى. يمكنك توقع نفس الأداء عند استخدام واجهة برمجة التطبيقات `Eager` + `Compile` مقارنة بنهج `mark_step/sync` الحالي.
 
-### Inference
+### الاستنتاج
+
 ```python
 torch_xla.experimental.eager_mode(True)
 
 compiled_model = torch.compile(model, backend="openxla")
 ```
-It is recommened to use the `torch.compile` instead of `torch_xla.compile` for inference to reduce the tracing overhad. 
 
-### Training
+من المستحسن استخدام `torch.compile` بدلاً من `torch_xla.compile` للاستدلال لتقليل عبء التتبع.
+
+### التدريب
+
 ```python
 torch_xla.experimental.eager_mode(True)
 
@@ -77,43 +83,40 @@ def step_fn(model, data, target, loss_fn, optimizer):
 
 step_fn = torch_xla.compile(step_fn)
 ```
-In training we asked user to refactor the `step_fn` out because it is usually better to compile the model's forward, backward and optimizer together. The long term goal is to also use `torch.compile` for training but right now we recommend user to use `torch_xla.compile`(for perfomrance reason).
 
-## Benchmark
+في التدريب، طلبنا من المستخدم إعادة هيكلة `step_fn` لأنه من الأفضل عادة تجميع عملية التقديم للأمام والخلف والمحسن للنموذج معًا. والهدف على المدى الطويل هو أيضًا استخدام `torch.compile` للتدريب، ولكن في الوقت الحالي نوصي المستخدم باستخدام `torch_xla.compile` (لأسباب تتعلق بالأداء).
 
-I run a 2 layer decoder only model training(it is pretty much just a llama2) with fake data on a single chip of v4-8 for 300 steps. Below is the number I observed.
+## المعيار المرجعي
 
+قمت بتشغيل نموذج فك تشفير مكون من طبقتين فقط (وهو في الأساس Llama2) مع بيانات وهمية على شريحة واحدة من v4-8 لمدة 300 خطوة. وفيما يلي الأرقام التي لاحظتها:
 
 <table>
-  <tr>
-   <td>
-   </td>
-   <td>token/s
-
-  </tr>
-  <tr>
-   <td>Tracing mode(base line)
-   </td>
-   <td>147
-   </td>
-   </td>
-  </tr>
-  <tr>
-   <td>Eager mode
-   </td>
-   <td>65
-   </td>
-
-   </td>
-  </tr>
-  <tr>
-   <td>Eager + torch_xla compile
-   </td>
-   <td>147
-   </td>
-   </td>
-  </tr>
+<tr>
+<td>
+</td>
+<td>الرموز المميزة/ثانية
+</tr>
+<tr>
+<td>وضع التتبع (خط الأساس)
+</td>
+<td>147
+</td>
+</td>
+</tr>
+<tr>
+<td>وضع Eager
+</td>
+<td>65
+</td>
+</td>
+</tr>
+<tr>
+<td>Eager + تجميع torch_xla
+</td>
+<td>147
+</td>
+</td>
+</tr>
 </table>
 
-
-Eager mode can achieve ~45% performance of the fully compiled model for the decoder only model. The trainer I used to test can be found [here](https://github.com/pytorch/xla/blob/master/examples/train_decoder_only_base.py) and [here](https://github.com/pytorch/xla/tree/master/examples/eager). Note that perfomrane of the eager mode is very model dependent. When I tried to run the resnet50, the eager mode perfomrance is ~1% of the compiled mode. We don't exepct user to use eager mode  to execute the main training loop. Eager mode is meant to be used to handle non-core part of the training/inference logic(Data preprocessing, random number generations etc) or debug.
+يمكن أن يحقق وضع `Eager` حوالي 45% من أداء النموذج المجمع بالكامل لنموذج فك التشفير فقط. ويمكن العثور على المدرب الذي استخدمته للاختبار [هنا](https://github.com/pytorch/xla/blob/master/examples/train_decoder_only_base.py) و [هنا](https://github.com/pytorch/xla/tree/master/examples/eager). يرجى ملاحظة أن أداء وضع `Eager` يعتمد بشدة على النموذج. فعندما حاولت تشغيل `ResNet50`، كان أداء وضع `Eager` حوالي 1% من وضع `Compiled`. لا نتوقع من المستخدم استخدام وضع `Eager` لتنفيذ حلقة التدريب الرئيسية. إنما الغرض من وضع `Eager` هو التعامل مع الجزء غير الأساسي من منطق التدريب/الاستدلال (مثل المعالجة المسبقة للبيانات، وتوليد الأرقام العشوائية، وما إلى ذلك) أو التصحيح.
