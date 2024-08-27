@@ -1,8 +1,9 @@
 :github_url: https://github.com/pytorch/xla
 
-PyTorch/XLA documentation
+وثائق PyTorch/XLA
 ===================================
-PyTorch/XLA is a Python package that uses the XLA deep learning compiler to connect the PyTorch deep learning framework and Cloud TPUs.
+
+PyTorch/XLA هو حزمة Python تستخدم مترجم XLA للتعلم العميق لربط إطار عمل PyTorch للتعلم العميق ووحدات معالجة Tensor من Google Cloud.
 
 .. toctree::
    :hidden:
@@ -12,13 +13,13 @@ PyTorch/XLA is a Python package that uses the XLA deep learning compiler to conn
 .. toctree::
    :glob:
    :maxdepth: 1
-   :caption: Docs
+   :caption: الوثائق
 
    *
 
 .. mdinclude:: ../../API_GUIDE.md
 
-PyTorch/XLA API
+واجهة برمجة التطبيقات PyTorch/XLA
 ==================================
 
 torch_xla
@@ -47,7 +48,6 @@ runtime
 .. autofunction:: use_spmd
 .. autofunction:: is_spmd
 .. autofunction:: initialize_cache
-
 
 xla_model
 ----------------------------------
