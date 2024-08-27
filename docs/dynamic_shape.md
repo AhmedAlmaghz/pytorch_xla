@@ -1,47 +1,56 @@
-# Dynamic shape
+# الشكل الديناميكي
 
-Dynamic shape refers to the variable nature of a tensor shape where its shape depends on the value of another upstream tensor. For example:
+يشير الشكل الديناميكي إلى الطبيعة المتغيرة لشكل المنسوج حيث يعتمد شكله على قيمة منسوج آخر أعلى منه في التسلسل. على سبيل المثال:
+
 ```
 >>> import torch, torch_xla
->>> in_tensor  = torch.randint(low=0, high=2, size=(5,5), device='xla:0')
+>>> in_tensor = torch.randint(low=0, high=2, size=(5,5), device='xla:0')
 >>> out_tensor = torch.nonzero(in_tensor)
 ```
-the shape of `out_tensor` depends on the value of `in_tensor` and is bounded by the shape of `in_tensor`. In other words, if you do
+
+يعتمد شكل "out_tensor" على قيمة "in_tensor" ويحدده شكل "in_tensor". وبعبارة أخرى، عند القيام بما يلي:
+
 ```
 >>> print(out_tensor.shape)
 torch.Size([<=25, 2])
 ```
-you can see the first dimension depends on the value of `in_tensor` and its maximum value is 25. We call the first dimension the dynamic dimension. The second dimension does not depend on any upstream tensors so we call it the static dimension.
 
-Dynamic shape can be further categorized into bounded dynamic shape and unbounded dynamic shape.
-- bounded dynamic shape: refers to a shape whose dynamic dimensions are bounded by static values. It works for accelerators that require static memory allocation (e.g. TPU).
-- unbounded dynamic shape: refers to a shape whose dynamic dimensions can be infinitely large. It works for accelerators that don’t require static memory allocation (e.g. GPU).
+يمكنك أن ترى أن البعد الأول يعتمد على قيمة "in_tensor" وأن قيمته القصوى هي 25. نطلق على البعد الأول البعد الديناميكي. أما البعد الثاني فلا يعتمد على أي منسوجات أعلى في التسلسل، لذلك نطلق عليه البعد الثابت.
 
-Today, only the bounded dynamic shape is supported and it is in the experimental phase.
+يمكن تصنيف الشكل الديناميكي بشكل أكبر إلى شكل ديناميكي محدود وشكل ديناميكي غير محدود.
 
-## Bounded dynamic shape
+- الشكل الديناميكي المحدود: يشير إلى شكل تكون أبعاده الديناميكية محدودة بقيم ثابتة. وهو يعمل مع المعالجات التي تتطلب تخصيص ذاكرة ثابت (مثل TPU).
 
-Currently, we support multi-layer perceptron models (MLP) with dynamic size input on TPU.
+- الشكل الديناميكي غير المحدود: يشير إلى شكل يمكن أن تكون أبعاده الديناميكية كبيرة بشكل لا نهائي. وهو يعمل مع المعالجات التي لا تتطلب تخصيص ذاكرة ثابتة (مثل GPU).
 
-This feature is controlled by a flag `XLA_EXPERIMENTAL="nonzero:masked_select"`. To run a model with the feature enabled, you can do:
+اليوم، لا يتم دعم سوى الشكل الديناميكي المحدود، وهو لا يزال في المرحلة التجريبية.
+
+## الشكل الديناميكي المحدود
+
+حاليًا، ندعم نماذج الشبكة العصبية الاصطناعية متعددة الطبقات (MLP) مع إدخال حجم ديناميكي على TPU.
+
+يتم التحكم في هذه الميزة بواسطة علم "XLA_EXPERIMENTAL="nonzero:masked_select"". لتشغيل نموذج مع تمكين هذه الميزة، يمكنك القيام بما يلي:
+
 ```
 XLA_EXPERIMENTAL="nonzero:masked_select:masked_scatter" python your_scripts.py
 ```
 
-Here are some numbers we get when we run the MLP model for 100 iterations:
+فيما يلي بعض الأرقام التي حصلنا عليها عند تشغيل نموذج MLP لـ 100 تكرار:
 
-|             | No dynamic shape  | With dynamic shape     |
+|             | بدون شكل ديناميكي | مع شكل ديناميكي     |
 | :---        |    :----:         |          ---: |
-| End-to-end training time | 29.49             | 20.03   |
-| Number of compilations   | 102               | 49      |
-| Compilation cache hit    | 198               | 1953      |
+| وقت التدريب من البداية إلى النهاية | 29.49             | 20.03   |
+| عدد التجميعات   | 102               | 49      |
+| إصابة ذاكرة التخزين المؤقت للتجميع    | 198               | 1953      |
 
-![Performance comparison (a) without dynamic shape  (b) with dynamic shape](_static/img/dynamic_shape_mlp_perf.png)
+![مقارنة الأداء (أ) بدون شكل ديناميكي  (ب) مع شكل ديناميكي](_static/img/dynamic_shape_mlp_perf.png)
 
-One of the motivations of the dynamic shape is to reduce the number of excessive recompilation when the shape keeps changing between iterations. From the figure above, you can see the number of compilations reduced by half which results in the drop of the training time.
+يتمثل أحد دوافع الشكل الديناميكي في تقليل عدد عمليات إعادة التجميع المفرطة عندما يتغير الشكل باستمرار بين التكرارات. ومن الشكل أعلاه، يمكنك أن ترى أن عدد التجميعات قد انخفض إلى النصف، مما أدى إلى انخفاض وقت التدريب.
 
-To try it out, run
+لتجربته، قم بتشغيل ما يلي:
+
 ```
 XLA_EXPERIMENTAL="nonzero:masked_select" PJRT_DEVICE=TPU python3 pytorch/xla/test/ds/test_dynamic_shape_models.py TestDynamicShapeModels.test_backward_pass_with_dynamic_input
 ```
-For more details on how we plan to expand the dynamic shape support on PyTorch/XLA in the future, feel free to review our [RFC](https://github.com/pytorch/xla/issues/3884).
+
+للحصول على مزيد من التفاصيل حول كيفية تخطيطنا لتوسيع دعم الشكل الديناميكي في PyTorch/XLA في المستقبل، يمكنك مراجعة طلب التعليقات الخاص بنا على الرابط التالي: [RFC](https://github.com/pytorch/xla/issues/3884).
