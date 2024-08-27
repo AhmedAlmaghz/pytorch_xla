@@ -1,35 +1,34 @@
-# Source of recompilations in torch_xla
+مصدر إعادة التجميع في torch_xla
 
-## Let’s first start with some facts/constraints:
+دعونا نبدأ أولا ببعض الحقائق/القيود:
 
-1. Graph compilations in XLA are pretty expensive.
-2. XLA handles static shape only. In other words, even for the same IR graph, XLA recompiles when input shape changes.
-3. Recompilations hurts torch_xla perf a lot when it happens, and it’s hard to understand and debug from a normal python user POV.
+1. عمليات تجميع الرسوم البيانية في XLA مكلفة للغاية.
+2. XLA يتعامل مع الشكل الثابت فقط. وبعبارة أخرى، حتى لنفس رسم IR، XLA يعيد التجميع عند تغيير شكل الإدخال.
+3. تؤثر عمليات إعادة التجميع سلبًا على أداء torch_xla بشكل كبير عندما تحدث، ومن الصعب فهمها وإصلاحها من وجهة نظر المستخدم العادي لـ Python.
 
-Often when recompilation happens we say we just need dynamic shape support and then rest assured that when dynamic shape is supported in the future, all the recompilations will be magically gone. But this is not true, XLA now has pretty good bounded dynamic shapes coverage already, but we still see recompilations and they are expected.
+غالبًا ما نقول عندما تحدث عملية إعادة التجميع، إننا نحتاج فقط إلى دعم الشكل الديناميكي، ثم نطمئن إلى أنه عندما يتم دعم الشكل الديناميكي في المستقبل، ستختفي جميع عمليات إعادة التجميع بشكل سحري. لكن هذا غير صحيح، حيث أن XLA لديه بالفعل تغطية جيدة جدًا للأشكال الديناميكية المحدودة، ولكننا ما زلنا نرى عمليات إعادة التجميع وهي متوقعة.
 
-***This doc aims to provide a detailed explanation of a few common sources of recompilations, and what do we need to get rid of them.  It will mainly focus on explaining the problem to beginners without any context. To make it easy to understand, the “solutions” proposed here may rely on impractical assumptions.* **
+تهدف هذه الوثيقة إلى تقديم شرح مفصل لبعض المصادر الشائعة لإعادة التجميع، وما نحتاج إلى فعله للتخلص منها. ستركز بشكل أساسي على شرح المشكلة للمبتدئين دون أي سياق. لتسهيل الفهم، قد تعتمد "الحلول" المقترحة هنا على افتراضات غير عملية.
 
-## #1. From input dataset.
+#1. من مجموعة البيانات المدخلة
 
-Yes it’s pretty common that input dataset contains examples with different shapes, e.g. sentences with varying length or images with different sizes. Without normalization, it’ll cause recompilation for every new input shape.
+نعم، من الشائع جدًا أن تحتوي مجموعة البيانات المدخلة على أمثلة بأشكال مختلفة، مثل الجمل ذات الأطوال المختلفة أو الصور بأحجام مختلفة. بدون التوحيد القياسي، سيؤدي ذلك إلى إعادة تجميع لكل شكل إدخال جديد.
 
-Tensorflow graph mode users are more used to do padding/bucketization (`tf.pad`) to normalize input shapes to one or a few buckets. But this is kinda anti-pattern for PyTorch eager frontend users (which is the same user lazy tensor frontend is trying to target) since different input shapes just doesn’t matter for eager CPU/CUDA backend.
+عادة ما يقوم مستخدمو وضع الرسم البياني TensorFlow بإجراء التعبئة/التقسيم إلى دلو (tf.pad) لتوحيد أشكال الإدخال إلى دلو واحد أو عدد قليل من الدلاء. ولكن هذا يتعارض مع نمط مستخدمي واجهة PyTorch الأمامية المتحمسين (والذي يستهدف واجهة المستخدم الأمامية للتوتر الكسول أيضًا) نظرًا لأن أشكال الإدخال المختلفة لا تهم الواجهة الخلفية لـ CPU/CUDA المتحمسة.
 
-**Proposed workaround:** okay now let’s say we can work around this problem by teaching our users to do padding/bucketization (it’s hard in practice :P). What’s next?
+حل بديل مقترح: حسنًا، دعنا نقول إننا يمكننا حل هذه المشكلة عن طريق تعليم مستخدمينا إجراء التعبئة/التقسيم إلى دلو (من الصعب القيام بذلك عمليًا :P). ما التالي؟
 
-## #2. From operator output
+#2. من إخراج المشغل
 
-There are certain operators semantically are data-dependent and produce dynamic shape outputs: e.g. `torch.nonzero` returns indices of nonzero elements in its input tensor. So even your input tensors to this operator always have the same shape, it might produce different shape outputs and cause recompilations.
+هناك بعض المشغلات التي تكون ديناميكية من الناحية الدلالية وتنتج أشكال إخراج ديناميكية: على سبيل المثال، يعيد torch.nonzero المؤشرات إلى العناصر غير الصفرية في موتر الإدخال الخاص به. لذلك، حتى إذا كانت موترات الإدخال لهذا المشغل دائمًا بنفس الشكل، فقد ينتج أشكال إخراج مختلفة ويتسبب في عمليات إعادة تجميع.
 
-### 2.1 Bounded dynamic shape can fix the case when you use the tensor with dynamic shape as a Tensor, without querying its real dimension.
+2.1 يمكن أن يصلح الشكل الديناميكي المحدود الحالة التي تستخدم فيها الموتر ذو الشكل الديناميكي كموتر، دون الاستعلام عن أبعاده الفعلية.
 
-**Proposed workaround:** let’s say now XLA supports bounded dynamic shape for all operators, is it good enough?
+حل بديل مقترح: دعنا نقول الآن أن XLA يدعم الشكل الديناميكي المحدود لجميع المشغلين، فهل هذا جيد بما فيه الكفاية؟
 
-* by bounded dynamic shape it means we can pad the tensor to a theoretical max, trading more memory usage for less recompilation/faster speed.
+* يعني الشكل الديناميكي المحدود أنه يمكننا تعبئة الموتر إلى الحد الأقصى النظري، مما يؤدي إلى زيادة استخدام الذاكرة مقابل تقليل إعادة التجميع/زيادة السرعة.
 
-Well, sort of. Let’s see the following example:
-
+حسنًا، إلى حد ما. دعنا نرى المثال التالي:
 
 ```
 a = torch.tensor([1, 2, 0, 1, 3], device='xla')
@@ -39,138 +38,132 @@ d = c + 1
 print(torch_xla._XLAC._get_xla_tensors_text([d]))
 ```
 
-In the example above every node below `b` in the graph (namely `c, d` and everything depend on them) will have dynamic shape, it’s pretty obvious that `b` has dynamic shape in dimension 0 as shown below:
-
+في المثال أعلاه، سيكون لكل عقدة أسفل "b" في الرسم البياني (بمعنى "c" و"d" وكل ما يعتمد عليهما) شكل ديناميكي، ومن الواضح أن "b" له شكل ديناميكي في البعد 0 كما هو موضح أدناه:
 
 ```
-  %9 = (s64[<=5,1]{1,0}, s64[]) aten::nonzero(%8), num_outputs=2 # b
-  %10 = s64[5,1]{1,0} aten::mul(%9.0, %3) # c
-  %11 = s64[5,1]{1,0} aten::add(%10, %2), ROOT=0 # d
+%9 = (s64[<=5,1]{1,0}, s64[]) aten::nonzero(%8), num_outputs=2 # b
+%10 = s64[5,1]{1,0} aten::mul(%9.0, %3) # c
+%11 = s64[5,1]{1,0} aten::add(%10, %2), ROOT=0 # d
 ```
 
-Although it's not shown directly in the graph, `c & d` indeed also have dynamic shape (in other words, [5, 1] is just padded shape and it's masked).
+على الرغم من أنه لا يتم عرضه مباشرة في الرسم البياني، فإن "c" و"d" لهما أيضًا شكل ديناميكي (بعبارة أخرى، [5، 1] هو الشكل المبطن فقط وهو مقنع).
 
 ```
 print(torch_xla._XLAC._get_xla_tensor_dimension_size(d, 0)) # prints 4 instead of 5
 ```
 
-You can see that in this case as long as the input tensor `a` has shape `[5]` we only compile the graph once. Bounded dynamic shape support helped!
+يمكنك أن ترى أنه في هذه الحالة، طالما أن موتر الإدخال "a" له الشكل [5]، فإننا نقوم بتجميع الرسم البياني مرة واحدة فقط. ساعد دعم الشكل الديناميكي المحدود!
 
-### 2.2 what if real dimension is queried on a tensor with dynamic shape?
+2.2 ماذا لو تم الاستعلام عن البعد الفعلي على موتر ذي شكل ديناميكي؟
 
-This is actually pretty commonly used since not all PyTorch computation are done in the form of Tensors.
+يتم استخدام هذا بالفعل بشكل شائع نظرًا لأن حسابات PyTorch لا تتم جميعها على شكل موترات.
 
-For example, `tensor.size()` in PyTorch returns a tuple of ints instead of a Tensor of dtype=int. When `tensor` is a dynamic shape tensor, this op basically forces XLA to cut the graph and evaluate so that we can return the correct scalar (otherwise it’ll just return the padded shape which is wrong).
+على سبيل المثال، تعيد tensor.size() في PyTorch مجموعة من الأعداد الصحيحة بدلاً من موتر من dtype=int. عندما يكون "الموتر" موترًا ذا شكل ديناميكي، فإن هذا المشغل يجبر XLA فعليًا على قطع الرسم البياني وتقييمه حتى نتمكن من إعادة القيمة الصحيحة (وإلا فإنه سيعيد الشكل المبطن فقط وهو خطأ).
 
-What’s made it worse is that many PyTorch takes scalar inputs as well. After you do `s = tensor.size(0)` and use `s` in other operators it also becomes a dynamic source. In this case we probably know how to pad it and its upper bound, but we cannot do it since it’s not even a Tensor!
-
+ما زاد الأمر سوءًا هو أن العديد من PyTorch يأخذ إدخالات قياسية أيضًا. بعد أن تقوم بـ s = tensor.size(0) وتستخدم "s" في مشغلين آخرين، فإنه يصبح مصدرًا ديناميكيًا أيضًا. في هذه الحالة، ربما نعرف كيفية تعبئتها وحدودها العليا، ولكن لا يمكننا القيام بذلك لأنها ليست موترًا حتى!
 
 ```
- a = torch.tensor([1, 2, 0, 1, 3], device='xla')
- b = torch.nonzero(a)
- s = a.size(0) # evaluation happens! nit: we use size() for simplicity, the actual API is _get_xla_tensor_dimension_size.
- c = torch.rand(s, device='xla') # c can be of any shape between [0, 5] which causes more recompilations!
- d = c + 1
+a = torch.tensor([1, 2, 0, 1, 3], device='xla')
+b = torch.nonzero(a)
+s = a.size(0) # يحدث التقييم! ملاحظة: نستخدم size() للتبسيط، واجهة برمجة التطبيقات الفعلية هي _get_xla_tensor_dimension_size.
+c = torch.rand(s, device='xla') # يمكن أن يكون c بأي شكل بين [0، 5] مما يتسبب في المزيد من عمليات إعادة التجميع!
+d = c + 1
 ```
 
-So this one is actually hard to solve without PyTorch frontend’s help. What do we need?
+لذلك، من الصعب حل هذه المشكلة دون مساعدة واجهة PyTorch الأمامية. ماذا نحتاج؟
 
-In short, we need a Tensor world!
+باختصار، نحتاج إلى عالم موتر!
 
-For example,
+على سبيل المثال،
 
-* `tensor.size()` should return a Tensor so that it can be a Tensor with dynamic shape and kept in the graph without early evaluation.
-* Tensor accessor, e.g. for 2D tensor, `tensor[0][0]` now returns a value but this need to return a tensor as well.
-* Implicitly this means all operators currently taking int/float/double as input need a Tensor overload as well. THIS IS A BIG ASK as it can easily explode our operator set.
-    * It’s easier if we can make scalar to Tensor conversion really cheap so that we can only care about the Tensor overload.
-    * In practice not all ops takes scalars from previous computation, so we’ve been adding Tensor variants by ad-hoc requests.
-    * This is also a common ask from tracing base approaches I think.
+* يجب أن تعيد tensor.size() موترًا حتى يمكن أن يكون موترًا ذا شكل ديناميكي ويظل في الرسم البياني دون تقييم مبكر.
+* موتر الملحق، على سبيل المثال لموتر ثنائي الأبعاد، tensor[0][0] يعيد الآن قيمة ولكن هذا يجب أن يعيد موترًا أيضًا.
+* ضمنيًا، يعني ذلك أن جميع المشغلين الذين يقبلون int/float/double كإدخال يحتاجون إلى زيادة الحمل الزائد للموتر أيضًا. هذا طلب كبير لأنه يمكن أن يزيد بسهولة مجموعة المشغلين لدينا.
+* من الأسهل إذا كان من الممكن جعل تحويل القيمة القياسية إلى موتر رخيصًا جدًا حتى نتمكن من الاهتمام فقط بزيادة الحمل الزائد للموتر.
+* في الممارسة العملية، لا تأخذ جميع المشغلين قياسات من الحسابات السابقة، لذا فقد كنا نضيف متغيرات الموتر عن طريق طلبات مخصصة.
+* هذا أيضًا طلب شائع من نهج التتبع الأساسي أعتقد.
 
-Okay now that we assume every op in PyTorch has a Tensor verison we need, are we done?
+حسنًا، الآن افترض أن كل عملية في PyTorch لديها إصدار Tensor نحتاجه، هل انتهينا؟
 
-## #3. From control flow
+#3. من تدفق التحكم
 
-No! We actually only solved the problem without data dependent control flow...
+كلا! لقد قمنا بالفعل بحل المشكلة دون تدفق تحكم يعتمد على البيانات...
 
-See the example below:
+انظر المثال أدناه:
 
 ```
 if x[0][0] == 3:
-  bla
+bla
 else:
-  blabla
+blabla
 ```
 
-Even if `x[0][0]` was a Tensor, we need to execute/materialize its value for python interpreter to proceed. And different branch choices in multiple control flows combined means we have a lot of graph to compile as well!
+حتى إذا كان x[0][0] موترًا، فيجب علينا تنفيذ/تجسيد قيمته حتى يتمكن مفسر Python من الاستمرار. واختيار فرع مختلف في تدفقات التحكم المتعددة مجتمعة يعني أن لدينا الكثير من الرسوم البيانية لتجميعها أيضًا!
 
-For now we just have no way to fix this. To fix it we need to lower the control flow from python to graph! Without too much thinking in implementation we can do this in two ways:
+في الوقت الحالي، ليس لدينا طريقة لإصلاح ذلك. لإصلاحه، نحتاج إلى تقليل تدفق التحكم من Python إلى الرسم البياني! دون الكثير من التفكير في التنفيذ، يمكننا القيام بذلك بطريقتين:
 
-* ask users to explicitly use a control flow op instead of python if/else/while/for. This is currently supported as [customized API in torch_xla](https://github.com/pytorch/xla/blob/master/torch_xla/core/xla_builder.py#L563-L574) but not widely adopted in users’ code. (python users are used to if/else/for and it’s hard to switch them to a uglier API unless there’s a huge perf win).
-* parse python source. code to get the control flow statement automatically. This is like Torchscript and somehow merge the torchscripted graph into the lazily trace graph properly (including shape info etc). I haven’t thought through the steps of how to implement this indeed :P
+* اطلب من المستخدمين استخدام مشغل تدفق تحكم بشكل صريح بدلاً من Python if/else/while/for. هذا مدعوم حاليًا كـ [واجهة برمجة تطبيقات مخصصة في torch_xla](https://github.com/pytorch/xla/blob/master/torch_xla/core/xla_builder.py#L563-L574) ولكنه غير مُعتمد على نطاق واسع في رمز المستخدم. (اعتاد مستخدمو Python على if/else/for ومن الصعب تحويلهم إلى واجهة برمجة تطبيقات أكثر قبحًا ما لم يكن هناك فوز كبير في الأداء).
+* قم بتفسير رمز مصدر Python للحصول على بيان تدفق التحكم تلقائيًا. هذا مثل Torchscript وبطريقة ما قم بدمج الرسم البياني لـ Torchscripted في الرسم البياني الذي يتم تتبعه بإهمال (بما في ذلك معلومات الشكل وما إلى ذلك). لم أفكر في خطوات التنفيذ بالفعل :P
 
-But either solution above requires non-trivial amount of effort, either on user side or on the framework side. That’s why we currently just take the hit of early evaluation & multiple compilations as a short term solution given the bandwidth we have.
+ولكن يتطلب أي حل أعلاه قدرًا غير قليل من الجهد، إما على جانب المستخدم أو على جانب الإطار. ولهذا نتحمل حاليًا ضربة التقييم المبكر وعمليات التجميع المتعددة كحل قصير الأجل بالنطاق الترددي الذي نمتلكه.
 
-Okay so now we assume that also have control flow lowered in the graph automagically, are we gold?
+حسنًا، لذا افترض الآن أن لدينا أيضًا تدفق تحكم مخفض في الرسم البياني تلقائيًا، هل نحن جاهزون؟
 
-YES! Now you have your whole computation represented in a graph of Tensor operations, including control flow so that compilers can now consume and do their smart tricks! But tbh at this point your program is no longer very PyTorch-y.
+نعم! الآن لديك كل حساباتك ممثلة في رسم بياني لعمليات موتر، بما في ذلك تدفق التحكم بحيث يمكن للمترجمين الآن استهلاكها والقيام بالحيل الذكية الخاصة بهم! ولكن بصراحة، في هذه المرحلة، لم يعد برنامجك يشبه PyTorch.
 
+الخلاصة:
 
-## Conclusion:
+هناك في الواقع مصادر متعددة لإعادة التجميع ولا يمكن أن يحل الشكل الديناميكي المحدود كل ذلك. الحلول البديلة المقترحة في هذه الوثيقة غير عملية في بعض الأحيان، وقد تكون هناك طرق أفضل لإصلاح كل مصدر بشكل صحيح لا أعرفه على الإطلاق. ولكن آمل أنه مع استمرارنا في شق طريقنا إلى مكدس التوتر الكسول المثالي في هذه الوثيقة، أصبح من الأسهل الآن فهم العقبات المتبقية أمامنا.
 
-There’re actually multiple sources of recompilation and bounded dynamic shape support cannot solve all of them. The proposed workarounds in this doc are definitely sometimes impractical, and there might be better ways to fix each source properly that I’m totally unaware of. But I hope as we keep smashing our way to an ideal lazy tensor stack in this doc, it’s now easier for you understand what’re the remaining blockers ahead of us.
+التذييل:
 
+1. يستخدم NNC الأشكال الرمزية، فهل هذا يساعد؟
 
-## Appendix:
+نعم ولكن جزئيًا. من خلال وجود شكل رمزي، لم تعد عملية تحسين التجميع تتطلب قيم أشكال ملموسة. وبعبارة أخرى، فإن نواة المولد أكثر عمومية من نوى الأشكال الثابتة لـ XLA.
 
-1. NNC uses symbolic shapes, does that help?
+وما هي المشكلة التي يساعد ذلك على حلها بالضبط؟
 
-Yes but partially. By having symbolic shape, your compilation optimization no longer requires concrete shape values. In other words your generated kernel are more general than XLA’s static shape ones.
-
-And which exactly problem does it help?
-
-It helps with cases like #1 and #2.1.
-
+إنه يساعد في الحالات مثل #1 و #2.1.
 
 ```
-shape [3, 5] -> add -> transpose -> ... -> mul
-shape [6, 2] -> add -> transpose -> ... -> mul
+الشكل [3، 5] -> إضافة -> عبر -> ... -> مضروب
+الشكل [6، 2] -> إضافة -> عبر -> ... -> مضروب
 
-# with symbolic shape
-shape [x, y] -> add -> transpose -> ... -> mul
+# مع الشكل الرمزي
+الشكل [x، y] -> إضافة -> عبر -> ... -> مضروب
 ```
 
-With symbolic shape your generated kernel doesn’t recompile as XLA does with static shapes.
+مع الشكل الرمزي، لا يعيد نواة المولد التجميع كما تفعل XLA مع الأشكال الثابتة.
 
-XLA solves this problem in the other way, by using padding/bucketization (for #1) and bounded dynamic shape (for #2.1).
+تحل XLA هذه المشكلة بطريقة أخرى، باستخدام التعبئة/التقسيم إلى دلو (لـ #1) والشكل الديناميكي المحدود (لـ #2.1).
 
-Brian Hirsh(@bdhirsh) asked some really good questions in the comment, moving here to make them more visible:
+طرح Brian Hirsh (@bdhirsh) بعض الأسئلة الجيدة حقًا في التعليق، والانتقال من هنا إلى جعلها أكثر وضوحًا:
 
-2. Is it worth sticking a TORCH_WARN in the XLA kernels of ops that produce data-dependent output shapes?
+2. هل يستحق الأمر وضع TORCH_WARN في نوى XLA للمشغلين الذين ينتجون أشكال إخراج تعتمد على البيانات؟
 
-Yea torch_warn is useful in telling users "hey your program won't run blazing fast". But for these data dependent ops, there isn't an easy rewrite for them unless users change the logic in their model. (another example is torch.unique())
+نعم، من المفيد أن يخبر المستخدمين "هاي، لن يعمل برنامجك بسرعة كبيرة". ولكن بالنسبة لهذه المشغلين المعتمدين على البيانات، لا توجد إعادة كتابة سهلة لهم ما لم يغير المستخدمون المنطق في نموذجهم. (مثال آخر هو torch.unique())
 
-3. How ops like nonzero impact our ability to devirtualize sizes()? If we want to devirtualize sizes(), we’ll need to be able to eagerly compute sizes for each op - won’t that mean we’re forced to evaluate the graph every time we hit an op like nonzero? Vs. right now, it sounds like we don't actually force an evaluation when a user calls nonzero()?
+3. كيف تؤثر المشغلين مثل nonzero على قدرتنا على إلغاء الظاهرية sizes()؟ إذا أردنا إلغاء الظاهرية sizes()، فسوف نحتاج إلى القدرة على حساب الأحجام بشكل متلهف لكل عملية - ألا يعني ذلك أننا مجبرون على تقييم الرسم البياني في كل مرة نصادف فيها عملية مثل nonzero؟ مقابل في الوقت الحالي، يبدو أننا لا نجبر التقييم فعليًا عندما يستدعي المستخدم nonzero()؟
 
-Yea great question! So in the current form it’s not a hard blocker since size() on XLA Tensors doesn’t carry source of truth size information. As shown in the example, the source of truth lives in IRValue and can be retrieved by `_get_xla_tensor_dimension_size` only. So if we decide to devirtualize size it’ll just enforce this discrepancy.
+سؤال رائع! لذلك، في الشكل الحالي، فهو ليس حاصرا صعبًا نظرًا لأن size() على موترات XLA لا تحمل معلومات حجم الحقيقة. كما هو موضح في المثال، فإن مصدر الحقيقة يعيش في IRValue ويمكن استرجاعه بواسطة _get_xla_tensor_dimension_size فقط. لذا، إذا قررنا إلغاء الظاهرية size، فسيفرض ذلك هذا التباين.
 
-As a followup if we have `size()` return Tensor instead of values as mentioned in the proposed workarounds above. In that case size() won’t be able to devirtualize since it becomes an operator (taking in Tensor and produce Tensor, have different implementations for different backends.)
+كمتابعة، إذا كان لدينا size() لإعادة موتر بدلاً من القيم كما هو مذكور في الحلول البديلة المقترحة أعلاه. في هذه الحالة، لن تتمكن size() من إلغاء الظاهرية نظرًا لأنها تصبح مشغلًا (يأخذ موتر كإدخال وينتج موتر، ولديه عمليات تنفيذ مختلفة لواجهات خلفية مختلفة.)
 
-4. If I, e.g. call `torch.add(input, 1)` in a loop, where input varies in size from 1-1000, normally we would have to compile 1000 different graphs - but with dynamic shapes, it sounds like XLA will internally be able to generate a single graph where it says “use this graph if the input size is <=1000”. My question is: is “dynamic shape” a property of just the graph? Or of both the graph and the input. I.e. if my code were instead calling `x = torch.add(input, 1); x.sizes()` in a loop, does x have a dynamic shape at this point, meaning we’d need to run the graph to get the sizes? Or are we able to make it an eagerly computed property even in the presence of graphs with dynamic shapes.
+4. إذا قمت، على سبيل المثال، باستدعاء `torch.add(input، 1)` في حلقة، حيث يختلف الإدخال في الحجم من 1 إلى 1000، فعادة ما يتعين علينا تجميع 1000 رسم بياني مختلف - ولكن مع الأشكال الديناميكية، يبدو أن XLA ستتمكن داخليًا من إنشاء رسم بياني واحد حيث تقول "استخدم هذا الرسم البياني إذا كان حجم الإدخال <=1000". سؤالي هو: هل "الشكل الديناميكي" خاصية الرسم البياني فقط؟ أو من الرسم البياني والإدخال. بمعنى إذا كان رمزي هو `x = torch.add(input، 1)؛ x.sizes()` في حلقة، فهل لدى x شكل ديناميكي في هذه المرحلة، مما يعني أننا سنحتاج إلى تشغيل الرسم البياني للحصول على الأحجام؟ أو هل يمكننا جعله خاصية محسوبة بإهمال حتى في وجود رسوم بيانية ذات أشكال ديناميكية.
 
-Yea in this case you'll compile 1000 different graphs. Dynamic shapes means its input has dynamic dimension in it. So when you query `x.sizes()` (currently need use get_dimention_size to get the correct size) it'll trigger *execution* (since the size didn't change it doesn't trigger recompilation). Without the line accessing size, it won't trigger any recompilation/execution when input has dynamic dimension.
+نعم، في هذه الحالة، ستجمع 1000 رسم بياني مختلف. تعني الأشكال الديناميكية أن إدخالها يحتوي على بُعد ديناميكي. لذا، عند الاستعلام عن `x.sizes()` (حاليًا يجب استخدام get_dimention_size للحصول على الحجم الصحيح) فإنه سيؤدي إلى تشغيل *التنفيذ* (نظرًا لأن الحجم لم يتغير، فإنه لا يؤدي إلى إعادة التجميع). بدون السطر الذي يصل إلى الحجم، فلن يؤدي إلى أي إعادة تجميع/تنفيذ عندما يكون للإدخال بُعد ديناميكي.
 
-5. Would an alternative of making control flow available in the graph be just to come up with a way to ensure that XLA graphs don't include control flow? i.e. if we have a model with a single conditional in the middle, then get XLA to produce 3 graphs: 1 for everything before the conditional, 1 for the if branch, and 1 for the else branch. That would mean you don't get the exponential blowup of new graphs for every combination of paths taken, but (a) the graphs are smaller and provide fewer optimization opportunities, and (b) it would probably be pretty non-trivial to get XLA to recognize where a conditional path is taken.
+5. هل سيكون البديل لجعل تدفق التحكم متاحًا في الرسم البياني هو مجرد التوصل إلى طريقة لضمان عدم احتواء رسوم XLA البيانية على تدفق التحكم؟ أي إذا كان لدينا نموذج به شرط واحد في المنتصف، فاجعل XLA ينتج 3 رسوم بيانية: 1 لكل شيء قبل الشرط، و1 لفرع if، و1 لفرع else. وهذا يعني أنك لا تحصل على الانفجار الأسي لرسوم بيانية جديدة لكل مجموعة من المسارات المتخذة، ولكن (أ) الرسوم البيانية أصغر وتوفر فرص تحسين أقل، و(ب) سيكون من الصعب جدًا جعل XLA يتعرف على المكان الذي يتم فيه اتخاذ مسار شرطي.
 
-Great point! So if we could break them up into smaller graphs it's indeed feasible. But in practice this pattern is annoying:
+نقطة عظيمة! لذلك، إذا تمكنا من تقسيمها إلى رسوم بيانية أصغر، فمن الممكن القيام بذلك. ولكن في الممارسة العملية، هذا النمط مزعج:
 
 ```
 y = <some computation>
 x = y + 2
-if x[0] == 2 :
-  z = y +1
+if x[0] == 2:
+z = y +1
 else:
-  z = y - 1
+z = y - 1
 ```
 
-Note you'll evaluate x using a subgraph when you hit control flow, but there might be previous variable included in the branch computation as well (like` y` is just one node smaller than x, but it wasn't materizalized when you evaluate `x`). So you're actually evaluating 1 small graph and two big graphs for this example. And with more control flow involved, y could get updated in multiple branches which still produces different combo of large graphs.
-
+لاحظ أنك ستقيم x باستخدام رسم بياني فرعي عند الوصول إلى تدفق التحكم، ولكن قد يكون هناك متغير سابق مدرج في حساب الفرع أيضًا (مثل "y" هو عق
