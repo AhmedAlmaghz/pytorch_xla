@@ -1,73 +1,54 @@
-# Custom Hardware Plugins
+# المكونات الإضافية للأجهزة المخصصة
 
-PyTorch/XLA supports custom hardware through OpenXLA's PJRT C API. The
-PyTorch/XLA team direclty supports plugins for Cloud TPU (`libtpu`) and GPU
-([OpenXLA](https://github.com/openxla/xla/tree/main/xla/pjrt/gpu)). The same
-plugins may also be used by JAX and TF.
+يدعم PyTorch/XLA الأجهزة المخصصة من خلال واجهة برمجة تطبيقات C الخاصة بـ PJRT في OpenXLA. ويدعم فريق PyTorch/XLA مباشرة المكونات الإضافية لجهاز Cloud TPU (`libtpu`) و GPU ([OpenXLA](https://github.com/openxla/xla/tree/main/xla/pjrt/gpu)). وقد تستخدم JAX وTF نفس المكونات الإضافية أيضًا.
 
-## Implementing a PJRT Plugin
+## تنفيذ مكون PJRT إضافي
 
-PJRT C API plugins may be closed-source or open-source. They contain two parts:
+قد تكون المكونات الإضافية لواجهة برمجة تطبيقات C في PJRT مفتوحة المصدر أو مغلقة المصدر. وهي تحتوي على جزأين:
 
-1. Binary exposing a PJRT C API implementation. This part can be shared with JAX
-and TensorFlow.
-2. Python package containing the above binary, as well as an implementation of
-our `DevicePlugin` Python interface, which handles additional setup.
+1. ثنائي يعرض تنفيذ واجهة برمجة تطبيقات C لـ PJRT. يمكن مشاركة هذا الجزء مع JAX و TensorFlow.
+2. حزمة Python تحتوي على الثنائي المذكور أعلاه، بالإضافة إلى تنفيذ لـ `DevicePlugin` واجهة برمجة تطبيقات Python الخاصة بنا، والتي تتعامل مع الإعداد الإضافي.
 
-### PJRT C API Implementation
+### تنفيذ واجهة برمجة تطبيقات C لـ PJRT
 
-In short, you must implement a
-[`PjRtClient`](https://github.com/openxla/xla/blob/main/xla/pjrt/pjrt_client.h)
-containing an XLA compiler and runtime for your device. The PJRT C++ interface
-is mirrored in C in the
-[`PJRT_Api`](https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api.h).
-The most straightforward option is to implement your plugin in C++ and [wrap
-it](https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api_wrapper_impl.h)
-as a C API implementation. This process is explained in detail in [OpenXLA's
-documentation](https://openxla.org/xla/pjrt_integration#how_to_integrate_with_pjrt).
+باختصار، يجب عليك تنفيذ [`PjRtClient`](<https://github.com/openxla/xla/blob/main/xla/pjrt/pjrt_client.h>) يحتوي على مترجم XLA ووقت تشغيل لجهازك. يتم عكس واجهة PJRT ++ في C في [`PJRT_Api`](<https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api.h>).
 
-For a concrete example, see the example [CPU plugin](../plugins/cpu). ([OpenXLA
-implementation](https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api_cpu_internal.cc)).
+الخيار الأكثر بساطة هو تنفيذ المكون الإضافي الخاص بك في C ++ و [لفه](<https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api_wrapper_impl.h>) كتطبيق واجهة برمجة تطبيقات C. تشرح هذه العملية بالتفصيل في [وثائق OpenXLA](<https://openxla.org/xla/pjrt_integration#how_to_integrate_with_pjrt>).
 
-### PyTorch/XLA Plugin Package
+للحصول على مثال ملموس، راجع مثال [مكون CPU الإضافي](../plugins/cpu). ([تنفيذ OpenXLA](<https://github.com/openxla/xla/blob/main/xla/pjrt/c/pjrt_c_api_cpu_internal.cc>)).
 
-At this point, you should have a functional PJRT plugin binary, which you can
-test with the placeholder `LIBRARY` device type. For example:
+### حزمة PyTorch/XLA المكون الإضافي
+
+في هذه المرحلة، يجب أن يكون لديك ثنائي مكون إضافي PJRT وظيفي، والذي يمكنك اختباره باستخدام نوع جهاز `LIBRARY` الوهمي. على سبيل المثال:
 
 ```
 $ PJRT_DEVICE=LIBRARY PJRT_LIBRARY_PATH=/path/to/your/plugin.so python
 >>> import torch_xla
 >>> torch_xla.devices()
-# Assuming there are 4 devices. Your hardware may differ.
+# افتراض وجود 4 أجهزة. قد تختلف أجهزة الأجهزة الخاصة بك.
 [device(type='xla', index=0), device(type='xla', index=1), device(type='xla', index=2), device(type='xla', index=3)]
 ```
 
-To register your device type automatically for users as well as to handle extra
-setup for e.g. multiprocessing, you may implement the `DevicePlugin` Python API.
-PyTorch/XLA plugin packages contain two key components:
+لتسجيل نوع جهازك تلقائيًا للمستخدمين وللتعامل مع الإعداد الإضافي للعديد من العمليات، على سبيل المثال، يمكنك تنفيذ واجهة برمجة تطبيقات Python لـ `DevicePlugin`. تحتوي حزم المكونات الإضافية لـ PyTorch/XLA على مكونين رئيسيين:
 
-1. An implementation of `DevicePlugin` that (at the very least) provides the
-path to your plugin binary. For example:
+1. تنفيذ `DevicePlugin` الذي يوفر (على الأقل) مسار الثنائي المكون الإضافي الخاص بك. على سبيل المثال:
 
 ```
 class CpuPlugin(plugins.DevicePlugin):
-
-  def library_path(self) -> str:
-    return os.path.join(
-        os.path.dirname(__file__), 'lib', 'pjrt_c_api_cpu_plugin.so')
+    def library_path(self) -> str:
+        return os.path.join(
+            os.path.dirname(__file__), 'lib', 'pjrt_c_api_cpu_plugin.so'
+        )
 ```
 
-2. A `torch_xla.plugins` [entry
-point](https://setuptools.pypa.io/en/latest/userguide/entry_point.html) that
-identifies your `DevicePlugin`. For exmaple, to register the `EXAMPLE` device
-type in a `pyproject.toml`:
+2. `torch_xla.plugins` [نقطة دخول](<https://setuptools.pypa.io/en/latest/userguide/entry_point.html>) تحدد `DevicePlugin` الخاص بك. على سبيل المثال، لتسجيل نوع الجهاز `EXAMPLE` في `pyproject.toml`:
 
 ```
 [project.entry-points."torch_xla.plugins"]
 example = "torch_xla_cpu_plugin:CpuPlugin"
 ```
 
-With your package installed, you may then use your `EXAMPLE` device directly:
+مع تثبيت الحزمة الخاصة بك، يمكنك بعد ذلك استخدام جهاز `EXAMPLE` الخاص بك مباشرة:
 
 ```
 $ PJRT_DEVICE=EXAMPLE python
@@ -76,7 +57,4 @@ $ PJRT_DEVICE=EXAMPLE python
 [device(type='xla', index=0), device(type='xla', index=1), device(type='xla', index=2), device(type='xla', index=3)]
 ```
 
-[`DevicePlugin`](https://github.com/pytorch/xla/blob/master/torch_xla/experimental/plugins.py)
-provides additional extension points for multiprocess initialization and client
-options. The API is currently in an experimental state, but it is expected to
-become stable in a future release.
+يوفر [`DevicePlugin`](<https://github.com/pytorch/xla/blob/master/torch_xla/experimental/plugins.py>) نقاط تمديد إضافية لتهيئة العمليات المتعددة وخيارات العميل. تعد واجهة برمجة التطبيقات حاليًا في حالة تجريبية، ولكن من المتوقع أن تصبح مستقرة في إصدار مستقبلي.
