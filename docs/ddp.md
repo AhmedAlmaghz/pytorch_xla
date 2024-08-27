@@ -1,63 +1,51 @@
-# How to do DistributedDataParallel(DDP)
+# كيفية تنفيذ DistributedDataParallel (DDP)
 
-This document shows how to use torch.nn.parallel.DistributedDataParallel in xla,
-and further describes its difference against the native xla data parallel
-approach. You can  find a minimum runnable example [here](https://github.com/pytorch/xla/blob/master/examples/data_parallel/train_resnet_ddp.py).
+توضح هذه الوثيقة كيفية استخدام torch.nn.parallel.DistributedDataParallel في xla، كما تصف الاختلاف بينها وبين نهج xla الأصلي للتوازي في البيانات. يمكنك العثور على مثال قابل للتنفيذ الأدنى [هنا](https://github.com/pytorch/xla/blob/master/examples/data_parallel/train_resnet_ddp.py).
 
+## الخلفية / الدافع
 
-## Background / Motivation
+لطالما طلب العملاء القدرة على استخدام واجهة برمجة تطبيقات DistributedDataParallel من PyTorch مع xla. وهنا نقوم بتمكينها كميزة تجريبية.
 
-Customers have long requested the ability to use PyTorch’s
-DistributedDataParallel API with xla. And here we enable it as an experimental
-feature.
+## كيفية استخدام DistributedDataParallel
 
+بالنسبة لأولئك الذين انتقلوا من وضع PyTorch Eager إلى XLA، فيما يلي جميع التغييرات التي تحتاج إلى إجرائها لتحويل نموذج DDP Eager إلى نموذج XLA. نفترض أنك تعرف بالفعل كيفية استخدام XLA [على جهاز واحد](../API_GUIDE.md#running-on-a-single-xla-device).
 
-## How to use DistributedDataParallel
+1. استيراد الحزم الموزعة المحددة لـ xla:
 
-For those who switched from the PyTorch eager mode to XLA, here are all the
-changes you need to do to convert your eager DDP model into XLA model. We assume
-that you already know how to use XLA [on a single
-device](../API_GUIDE.md#running-on-a-single-xla-device).
-
-1. Import xla specific distributed packages:
-
-```
+```py
 import torch_xla
 import torch_xla.runtime as xr
 import torch_xla.distributed.xla_backend
 ```
 
-2. Init xla process group similar to other process groups such as nccl and gloo.
+2. قم بتهيئة مجموعة العمليات xla على غرار مجموعات العمليات الأخرى مثل nccl و gloo.
 
-```
+```py
 dist.init_process_group("xla", rank=rank, world_size=world_size)
 ```
 
-3. Use xla specific APIs to get rank and world\_size if you need to.
+3. استخدم واجهات برمجة التطبيقات المحددة لـ xla للحصول على الرتبة وحجم العالم إذا كنت بحاجة إلى ذلك.
 
-```
+```py
 new_rank = xr.global_ordinal()
 world_size = xr.world_size()
 ```
 
-4. Pass `gradient_as_bucket_view=True` to the DDP wrapper.
+4. قم بتمرير `gradient_as_bucket_view=True` إلى غلاف DDP.
 
-```
+```py
 ddp_model = DDP(model, gradient_as_bucket_view=True)
 ```
 
-5. Finally launch your model with xla specific launcher.
+5. أخيرًا، قم بتشغيل نموذجك باستخدام برنامج الإطلاق المحدد لـ xla.
 
-```
+```py
 torch_xla.launch(demo_fn)
 ```
 
-Here we have put everything together (the example is actually taken from the
-[DDP tutorial](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html)).
-The way you code it is pretty similar to the eager experience. Just with xla
-specific touches on a single device plus the above five changes to your script.
+هنا قمنا بوضع كل شيء معًا (المثال مأخوذ بالفعل من [دليل DDP](https://pytorch.org/tutorials/intermediate/ddp_tutorial.html)). الطريقة التي تقوم بها بالترميز تشبه إلى حد كبير تجربة Eager. فقط مع لمسات xla المحددة على جهاز واحد بالإضافة إلى التغييرات الخمسة أعلاه إلى نصك البرمجي.
 
-```
+```py
 import os
 import sys
 import tempfile
@@ -131,150 +119,123 @@ if __name__ == "__main__":
     run_demo(demo_basic)
 ```
 
-## Benchmarking
+## المعايرة
 
+### Resnet50 ببيانات وهمية
 
-### Resnet50 with fake data
-
-The following results are collected with the command: `python
-test/test_train_mp_imagenet.py --fake_data --model=resnet50 --num_epochs=1` on a
-TPU VM V3-8 environment with ToT PyTorch and PyTorch/XLA. And the statistical
-metrics are produced by using the script in this [pull
-request](https://github.com/pytorch/xla/pull/4107). The unit for the rate is
-images per second.
+تم جمع النتائج التالية باستخدام الأمر: `python test/test_train_mp_imagenet.py --fake_data --model=resnet50 --num_epochs=1` في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT. وتم إنتاج المقاييس الإحصائية باستخدام النص البرمجي الموجود في هذا [طلب السحب](https://github.com/pytorch/xla/pull/4107). الوحدة لمعدل هي الصور في الثانية.
 
 <table>
-  <tr>
-   <td>Type
-   </td>
-   <td>Mean
-   </td>
-   <td>Median
-   </td>
-   <td>90th %
-   </td>
-   <td>Std Dev
-   </td>
-   <td>CV
-   </td>
-  </tr>
-  <tr>
-   <td>xm.optimizer_step
-   </td>
-   <td>418.54
-   </td>
-   <td>419.22
-   </td>
-   <td>430.40
-   </td>
-   <td>9.76
-   </td>
-   <td>0.02
-   </td>
-  </tr>
-  <tr>
-   <td>DDP
-   </td>
-   <td>395.97
-   </td>
-   <td>395.54
-   </td>
-   <td>407.13
-   </td>
-   <td>7.60
-   </td>
-   <td>0.02
-   </td>
-  </tr>
+<tr>
+<td>النوع
+</td>
+<td>يعني
+</td>
+<td>وسيط
+</td>
+<td>90%
+</td>
+<td>انحراف معياري
+</td>
+<td>السيرة الذاتية
+</td>
+</tr>
+<tr>
+<td>xm.optimizer_step
+</td>
+<td>418.54
+</td>
+<td>419.22
+</td>
+<td>430.40
+</td>
+<td>9.76
+</td>
+<td>0.02
+</td>
+</tr>
+<tr>
+<td>DDP
+</td>
+<td>395.97
+</td>
+<td>395.54
+</td>
+<td>407.13
+</td>
+<td>7.60
+</td>
+<td>0.02
+</td>
+</tr>
 </table>
 
+يبلغ الفرق في الأداء بين نهجنا الأصلي للتوازي في البيانات الموزعة وغلاف DistributedDataParallel هو: 1 - 395.97 / 418.54 = 5.39%. يبدو أن هذه النتيجة معقولة نظرًا لأن غلاف DDP يتسبب في حدوث تكاليف إضافية عند تتبع وقت تشغيل DDP.
 
-The performance difference between our native approach for distributed data
-parallel and DistributedDataParallel wrapper is: 1 - 395.97 / 418.54 = 5.39%.
-This result seems reasonable given the DDP wrapper introduces extra overheads on
-tracing the DDP runtime.
+### MNIST ببيانات وهمية
 
-### MNIST with fake data
-
-The following results are collected with the command: `python
-test/test_train_mp_mnist.py --fake_data` on a TPU VM V3-8 environment with ToT
-PyTorch and PyTorch/XLA. And the statistical metrics are produced by using the
-script in this [pull request](https://github.com/pytorch/xla/pull/4107). The
-unit for the rate is images per second.
+تم جمع النتائج التالية باستخدام الأمر: `python test/test_train_mp_mnist.py --fake_data` في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT. وتم إنتاج المقاييس الإحصائية باستخدام النص البرمجي الموجود في هذا [طلب السحب](https://github.com/pytorch/xla/pull/4107). الوحدة لمعدل هي الصور في الثانية.
 
 <table>
-  <tr>
-   <td>Type
-   </td>
-   <td>Mean
-   </td>
-   <td>Median
-   </td>
-   <td>90th %
-   </td>
-   <td>Std Dev
-   </td>
-   <td>CV
-   </td>
-  </tr>
-  <tr>
-   <td>xm.optimizer_step
-   </td>
-   <td>17864.19
-   </td>
-   <td>20108.96
-   </td>
-   <td>24351.74
-   </td>
-   <td>5866.83
-   </td>
-   <td>0.33
-   </td>
-  </tr>
-  <tr>
-   <td>DDP
-   </td>
-   <td>10701.39
-   </td>
-   <td>11770.00
-   </td>
-   <td>14313.78
-   </td>
-   <td>3102.92
-   </td>
-   <td>0.29
-   </td>
-  </tr>
+<tr>
+<td>النوع
+</td>
+<td>يعني
+</td>
+<td>وسيط
+</td>
+<td>90%
+</td>
+<td>انحراف معياري
+</td>
+<td>السيرة الذاتية
+</td>
+</tr>
+<tr>
+<td>xm.optimizer_step
+</td>
+<td>17864.19
+</td>
+<td>20108.96
+</td>
+<td>24351.74
+</td>
+<td>5866.83
+</td>
+<td>0.33
+</td>
+</tr>
+<tr>
+<td>DDP
+</td>
+<td>10701.39
+</td>
+<td>11770.00
+</td>
+<td>14313.78
+</td>
+<td>3102.92
+</td>
+<td>0.29
+</td>
+</tr>
 </table>
 
+يبلغ الفرق في الأداء بين نهجنا الأصلي للتوازي في البيانات الموزعة وغلاف DistributedDataParallel هو: 1 - 14313.78 / 24351.74 = 41.22%. نقارن هنا 90% بدلاً من ذلك نظرًا لأن مجموعة البيانات صغيرة وتتأثر الجولات القليلة الأولى بشدة بتحميل البيانات. هذا التباطؤ كبير ولكنه منطقي نظرًا لصغر حجم النموذج. من الصعب استهلاك التكلفة الإضافية لتتبع وقت تشغيل DDP.
 
-The performance difference between our native approach for distributed data
-parallel and DistributedDataParallel wrapper is: 1 - 14313.78 / 24351.74 =
-41.22%. Here we compare 90th % instead since the dataset is small and first a
-few rounds are heavily impacted by data loading. This slowdown is huge but makes
-sense given the model is small. The additional DDP runtime tracing overhead is
-hard to amortize.
+### MNIST ببيانات حقيقية
 
-### MNIST with real data
+تم جمع النتائج التالية باستخدام الأمر: `python test/test_train_mp_mnist.py --logdir mnist/` في بيئة TPU VM V3-8 مع PyTorch و PyTorch/XLA ToT.
 
-The following results are collected with the command: `python
-test/test_train_mp_mnist.py --logdir mnist/` on a TPU VM V3-8 environment with
-ToT PyTorch and PyTorch/XLA.
+![التعلم_المنحنيات](_static/img/ddp_md_mnist_with_real_data.png)
 
-![learning_curves](_static/img/ddp_md_mnist_with_real_data.png)
+ويمكننا أن نلاحظ أن غلاف DDP يتقارب بشكل أبطأ من النهج الأصلي لـ XLA على الرغم من أنه لا يزال يحقق معدل دقة مرتفع يبلغ 97.48% في النهاية. (يحقق النهج الأصلي 99%.)
 
-And we can observe that the DDP wrapper converges slower than the native XLA
-approach even though it still achieves a high accuracy rate at 97.48% at the
-end. (The native approach achieves 99%.)
+## إخلاء المسؤولية
 
-## Disclaimer
+لا تزال هذه الميزة تجريبية وهي قيد التطوير النشط. استخدمها بحذر، ولا تتردد في الإبلاغ عن أي أخطاء إلى [مستودع github xla](https://github.com/pytorch/xla/). بالنسبة لأولئك الذين يهتمون بالنهج الأصلي للتوازي في البيانات لـ xla، إليك [الدليل](../API_GUIDE.md#running-on-multiple-xla-devices-with-multi-processing).
 
-This feature is still experimental and under active development. Use it in
-cautions and feel free to file any bugs to the [xla github
-repo](https://github.com/pytorch/xla/). For those who are interested in the
-native xla data parallel approach, here is the
-[tutorial](../API_GUIDE.md#running-on-multiple-xla-devices-with-multi-processing).
+فيما يلي بعض المشكلات المعروفة التي يجري التحقيق فيها:
 
-Here are some of the known issues that are under investigation:
-*   `gradient_as_bucket_view=True` needs to be enforced.
-*   There are some issues while being used with `torch.utils.data.DataLoader`. `​​test_train_mp_mnist.py` with real data crashes before exiting.
+- يجب تطبيق `gradient_as_bucket_view=True`.
+- هناك بعض المشكلات أثناء الاستخدام مع `torch.utils.data.DataLoader`. `test_train_mp_mnist.py` مع البيانات الحقيقية تتحطم قبل الخروج.
