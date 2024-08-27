@@ -1,12 +1,13 @@
-## Bazel in Pytorch/XLA
+## Bazel في Pytorch/XLA
 
-[Bazel](https://bazel.build/) is a free software tool used for the automation of building and testing software. [TensorFlow](https://www.tensorflow.org/http) and [OpenXLA](https://github.com/openxla/xla) both use it, which makes it a good fit for PyTorch/XLA as well.
+[Bazel](https://bazel.build/) هي أداة برمجية مجانية تستخدم لتشغيل بناء البرامج واختبارها. ويستخدمها كل من [TensorFlow](https://www.tensorflow.org/http) و [OpenXLA](https://github.com/openxla/xla)، مما يجعلها مناسبة أيضًا لـ PyTorch/XLA.
 
-## Bazel dependencies
+## تبعيات Bazel
 
-Tensorflow is a [bazel external dependency](https://bazel.build/external/overview) for PyTorch/XLA, which can be seen in the `WORKSPACE` file:
+تعد Tensorflow [تبعيات خارجية لـ Bazel](https://bazel.build/external/overview) لـ PyTorch/XLA، ويمكن رؤيتها في ملف `WORKSPACE`:
 
 `WORKSPACE`
+
 ```bzl
 http_archive(
     name = "org_tensorflow",
@@ -17,28 +18,27 @@ http_archive(
 )
 ```
 
-TensorFlow pin can be updated by pointing this repository to a different revision. Patches may be added as needed.
-Bazel will resolve the dependency, prepare the code and patch it hermetically.
+يمكن تحديث تثبيت TensorFlow من خلال توجيه هذا المستودع إلى مراجعة مختلفة. ويمكن إضافة التصحيحات حسب الحاجة.
 
-For PyTorch, a different dependency mechanism is deployed because a local [PyTorch](https://github.com/pytorch/pytorch)
-checkout is used, and this local checkout has to be `built` from source and ideally installed on the system for version
-compatibility (e.g. codegen in PyTorch/XLA uses `torchgen` python module that should be installed in the system).
+سيقوم Bazel بحل التبعية وإعداد الكود وتصحيحه بشكل محكم.
 
-The local directory can either set in `bazel/dependencies.bzl`, or overriden on the command line:
+بالنسبة لـ PyTorch، يتم نشر آلية تبعية مختلفة لأننا نستخدم فحصًا محليًا لـ [PyTorch](https://github.com/pytorch/pytorch)، ويجب "بناء" هذا الفحص المحلي من المصدر وتثبيته في النظام من أجل توافق الإصدار (على سبيل المثال، يستخدم التوليد في PyTorch/XLA وحدة `torchgen` Python التي يجب تثبيتها في النظام).
+
+يمكن تعيين الدليل المحلي إما في `bazel/dependencies.bzl`، أو تجاوزه في سطر الأوامر:
 
 ```bash
 bazel build --override_repository=org_tensorflow=/path/to/exported/tf_repo //...
 ```
 
 ```bash
-bazel build --override_repository=torch=/path/to/exported/and/built/torch_repo //...
+bazel build --override_repository=torch=/path/
+to/exported/and/built/torch_repo //...
 ```
 
-Please make sure that the overridden repositories are at the appropriate revisions and in case of `torch`, that it
-has been built with `USE_CUDA=0 python setup.py bdist_wheel` to make sure that all expected build objects are present;
-ideally installed into the system.
+يرجى التأكد من أن المستودعات التي تم تجاوزها هي بالمراجع المناسبة، وفي حالة `torch`، تأكد من أنه قد تم بناؤه باستخدام `USE_CUDA=0 python setup.py bdist_wheel` للتأكد من وجود جميع كائنات البناء المتوقعة؛ يُفضل تثبيتها في النظام.
 
 `WORKSPACE`
+
 ```bzl
 new_local_repository(
     name = "torch",
@@ -47,130 +47,109 @@ new_local_repository(
 )
 ```
 
-PyTorch headers are directly sourced from the `torch` dependency, the local checkout of PyTorch. The shared libraries
-(e.g. `libtorch.so`) are sourced from the same local checkout where the code has been built and `build/lib/` contains the
-built objects. For this to work, it's required to pass `-isystemexternal/torch` to the compiler so it can find `system`
-libraries and satisfy them from the local checkout. Some are included as `<system>` and some as `"user"` headers.
+يتم الحصول على رؤوس PyTorch مباشرة من تبعية `torch`، وهي الفحص المحلي لـ PyTorch. يتم الحصول على المكتبات المشتركة (مثل `libtorch.so`) من نفس الفحص المحلي حيث تم بناء الكود ويحتوي `build/lib/` على الكائنات المبنية. لكي يعمل هذا، من الضروري تمرير `-isystemexternal/torch` إلى المترجم البرمجي حتى يتمكن من العثور على مكتبات "النظام" وتلبيتها من الفحص المحلي. يتم تضمين بعضها كمكتبات "<system>" والبعض الآخر كمكتبات `"user"` .
 
-Bazel brings in [pybind11](https://github.com/pybind/pybind11) embeded python and links against it to provide `libpython`
-to the plugin using this mechanism. Python headers are also sourced from there instead of depending on the system version.
-These are satisfied from the `"@pybind11//:pybind11_embed"`, which sets up compiler options for linking with `libpython`
-transitively.
+يجلب Bazel [pybind11](https://github.com/pybind/pybind11) Python المدمج ويربطه لتوفير `libpython` إلى المكون الإضافي باستخدام هذه الآلية. يتم أيضًا الحصول على رؤوس Python من هناك بدلاً من الاعتماد على إصدار النظام. يتم تلبيتها من `"@pybind11//:pybind11_embed"`، والذي يقوم بإعداد خيارات المترجم للربط مع `libpython` بشكل عابر.
 
-## How to build XLA libraries
+## كيفية بناء مكتبات XLA
 
-Building the libraries is simple:
+إن بناء المكتبات أمر بسيط:
 
 ```bash
 bazel build //torch_xla/csrc/runtime/...
 ```
 
-Bazel is configred via `.bazelrc`, but it can also take flags on the command line.
+يمكن تكوين Bazel عبر `.bazelrc`، ولكنه يمكن أن يأخذ الأعلام أيضًا في سطر الأوامر.
 
 ```bash
 bazel build --config=remote_cache //torch_xla/csrc/runtime/...
 ```
 
-The `remote_cache` configurations use gcloud for caching and  usually faster, but require
-authentication with gcloud. See `.bazelrc` for the configuration.
+تستخدم تكوينات `remote_cache` gcloud للتخزين المؤقت وعادة ما تكون أسرع، ولكنها تتطلب المصادقة باستخدام gcloud. راجع `.bazelrc` للحصول على التكوين.
 
-Using bazel makes it easy to express complex dependencies and there is a lot of gain from having a single build graph
-with everything expressed in the same way. Therefore, there is no need to build the XLA libraries separately from the
-rest of the pluing as used to be the case, building the whole repository, or the plugin shared object that links everythin
-else in, is enough.
+يجعل استخدام Bazel من السهل التعبير عن التبعيات المعقدة، وهناك الكثير من المكاسب من وجود رسم بياني بناء واحد حيث يتم التعبير عن كل شيء بنفس الطريقة. لذلك، لا توجد حاجة لبناء مكتبات XLA بشكل منفصل عن بقية المكون الإضافي كما كان الحال من قبل، حيث أن بناء المستودع بالكامل، أو الكائن المتشارك للمكون الإضافي الذي يربط كل شيء، هو أمر كافٍ.
 
-## How to build the Torch/XLA plugin
+## كيفية بناء مكون Torch/XLA الإضافي
 
-The normal build can be achieved by the invoking the standard `python setup.py bdist_wheel`, but C++ bindings can be built simply with:
+يمكن تحقيق البناء العادي من خلال استدعاء `python setup.py bdist_wheel` القياسي، ولكن يمكن بناء روابط C++ ببساطة باستخدام:
 
 ```bash
 bazel build //:_XLAC.so
 ```
 
-This will build the XLA client and the PyTorch plugin and link it all together. This can be useful when testing changes, to be
-able to compile the C++ code without building the python plugin faster iteration cycles.
+سيقوم هذا ببناء عميل XLA والمكون الإضافي لـ PyTorch وربطهما معًا. يمكن أن يكون هذا مفيدًا عند اختبار التغييرات، ليكون قادرًا على تجميع كود C++ دون بناء المكون الإضافي لـ Python لدورات التكرار الأسرع.
 
-## Remote caching
+## التخزين المؤقت البعيد
 
-Bazel comes with [remote caching](https://bazel.build/remote/caching) built in. There are plenty of cache backends that can be used; we deploy our caching on (GCS)[https://bazel.build/remote/caching#cloud-storage]. You can see the configuration in `.bazelrc`, under config name `remote_cache`.
+يأتي Bazel مع [التخزين المؤقت البعيد](https://bazel.build/remote/caching) مضمنًا. هناك العديد من واجهات التخزين المؤقت الخلفية التي يمكن استخدامها؛ نقوم بتنفيذ التخزين المؤقت لدينا على (GCS) [https://bazel.build/remote/caching#cloud-storage]. يمكنك الاطلاع على التكوين في `.bazelrc`، ضمن اسم التكوين `remote_cache`.
 
-Remote caching is disabled by default but because it speeds up incremental builds by a huge margin, it is almost always recommended, and it is enabled by default in the CI automation and on Cloud Build.
+يتم تعطيل التخزين المؤقت البعيد بشكل افتراضي ولكن نظرًا لأنه يسرع عمليات البناء التزايدية بشكل كبير، فهو موصى به دائمًا تقريبًا، وهو مُمكّن بشكل افتراضي في أتمتة CI وعلى Cloud Build.
 
-To authenticate on a machine, please ensure that you have the credentials present with `gcloud auth application-default login --no-launch-browser` or equivalent.
+للمصادقة على جهاز ما، يرجى التأكد من وجود بيانات الاعتماد لديك باستخدام `gcloud auth application-default login --no-launch-browser` أو ما يعادلها.
 
-Using the remote cache configured by `remote_cache` configuration setup requires authentication with GCP.
-There are various ways to authenticate with GCP. For individual developers who have access to the development GCP project, one only needs to
-specify the `--config=remote_cache` flag to bazel, and the default `--google_default_credentials` will be used and if the
-gcloud token is present on the machine, it will work out of the box, using the logged in user for authentication. The user
-needs to have remote build permissions in GCP (add new developers into the `Remote Bazel` role). In the CI, the service account key
-is used for authentication and is passed to bazel using `--config=remote_cache --google_credentials=path/to/service.key`.
-On [Cloud Build](https://cloud.google.com/build), `docker build --network=cloudbuild` is used to pass the authentication from the service
-account running the cloud build down into the docker image doing the compilation: [Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc) does the work there and authenticates as the service account. All accounts, both user and service accounts, need to have remote cache read/write permissions.
+يتطلب استخدام ذاكرة التخزين المؤقت البعيدة التي تم تكوينها بواسطة إعداد تكوين `remote_cache` المصادقة مع GCP.
 
-Remote cache uses cache silos. Each unique machine and build should specify a unique silo key to benefit from consistent caching. The silo key can be passed using a flag: `-remote_default_exec_properties=cache-silo-key=SOME_SILO_KEY'`.
+هناك طرق مختلفة للمصادقة مع GCP. بالنسبة للمطورين الفرديين الذين لديهم حق الوصول إلى مشروع التطوير GCP، ما عليك سوى تحديد علم `--config=remote_cache` لـ Bazel، وسيتم استخدام `--google_default_credentials` الافتراضي وإذا كان رمز مصادقة gcloud موجودًا على الجهاز، فسيتم تشغيله خارج الصندوق، باستخدام المستخدم الذي تم تسجيل الدخول للتحقق من صحته. يجب أن يكون لدى المستخدم أذونات بناء بعيدة في GCP (أضف المطورين الجدد إلى دور "Bazel عن بُعد"). في CI، يتم استخدام مفتاح حساب الخدمة للمصادقة ويتم تمريره إلى Bazel باستخدام `--config=remote_cache --google_credentials=path/to/service.key`.
 
-Running the build with remote cache:
+على [Cloud Build](https://cloud.google.com/build)، يتم استخدام `docker build --network=cloudbuild` لتمرير المصادقة من حساب الخدمة الذي يشغل Cloud Build إلى صورة Docker التي تقوم بالتجميع: تقوم [Application Default Credentials](https://cloud.google.com/docs/authentication/provide-credentials-adc) بالعمل هناك ويتم المصادقة باستخدام حساب الخدمة. يجب أن يكون لدى جميع الحسابات، لكل من المستخدم وحسابات الخدمة، أذونات قراءة/كتابة للتخزين المؤقت البعيد.
+
+يستخدم التخزين المؤقت البعيد صوامع التخزين المؤقت. يجب على كل آلة وبناء فريد تحديد مفتاح صومعة فريد للاستفادة من التخزين المؤقت المتسق. يمكن تمرير مفتاح الصومعة باستخدام علم: `-remote_default_exec_properties=cache-silo-key=SOME_SILO_KEY`.
+
+تشغيل البناء باستخدام التخزين المؤقت البعيد:
 
 ```bash
 BAZEL_REMOTE_CACHE=1 SILO_NAME="cache-silo-YOUR-USER" TPUVM_MODE=1 python setup.py bdist_wheel
 ```
 
-Adding
+قد يساعد أيضًا إضافة:
 
 ```bash
 GCLOUD_SERVICE_KEY_FILE=~/.config/gcloud/application_default_credentials.json
 ```
 
-might help too if `bazel` cannot find the auth token.
+إذا لم يتمكن "bazel" من العثور على رمز المصادقة.
 
-`YOUR-USER` here can the author's username or machine name, a unique name that ensures good cache behavior. Other `setup.py` functionality works as intended too (e.g. `develop`).
+يمكن أن يكون "YOUR-USER" هنا اسم مستخدم المؤلف أو اسم الجهاز، وهو اسم فريد يضمن سلوك التخزين المؤقت الجيد. تعمل وظائف "setup.py" الأخرى كما هو مقصود أيضًا (مثل "develop").
 
-The first time the code is compiled using a new cached key will be slow because it will compile everything from scratch, but incremental compilations will be very fast. On updating the TensorFlow pin, it will once again be a bit slower the first time per key, and then until the next update quite fast again.
+ستكون المرة الأولى التي يتم فيها تجميع الكود باستخدام مفتاح ذاكرة التخزين المؤقت الجديدة بطيئة لأنه سيقوم بتجميع كل شيء من الصفر، ولكن التجميعات التزايدية ستكون سريعة جدًا. عند تحديث تثبيت TensorFlow، سيكون الأمر أبطأ قليلاً في المرة الأولى لكل مفتاح، ثم حتى التحديث التالي سريعًا مرة أخرى.
 
-## Running tests
+## تشغيل الاختبارات
 
-Currently C++ code is built and tested by bazel. Python code will be migrated in the future.
+حاليًا، يقوم Bazel ببناء كود C++ واختباره. سيتم نقل كود Python في المستقبل.
 
-Bazel is a test plafrom too, making it easy to run tests:
+Bazel هو أيضًا منصة اختبار، مما يسهل تشغيل الاختبارات:
 
 ```bash
 bazel test //test/cpp:main
 ```
 
-Ofcourse the XLA and PJRT configuration have to be present in the environment to run the tests. Not all environmental variables are passed into the bazel test environment to make sure that the remote cache misses are not too common (environment
-is part of the cache key), see `.bazelrc` test configuration to see which ones are passed in, and add new ones as required.
+بالطبع، يجب أن يكون تكوين XLA وPJRT موجودًا في البيئة لتشغيل الاختبارات. لا يتم تمرير جميع المتغيرات البيئية إلى بيئة اختبار Bazel للتأكد من أن حالات عدم وجود ذاكرة التخزين المؤقت البعيدة ليست شائعة جدًا (البيئة جزء من مفتاح التخزين المؤقت)، راجع تكوين الاختبار `.bazelrc` لمعرفة تلك التي يتم تمريرها، وأضف الجديد حسب الحاجة.
 
-You can run the tests using the helper script too:
+يمكنك تشغيل الاختبارات باستخدام برنامج النصي المساعد أيضًا:
 
 ```bash
 BAZEL_REMOTE_CACHE=1 SILO_NAME="cache-silo-YOUR-USER" ./test/cpp/run_tests.sh -R
 ```
 
-The `xla_client` tests are pure hermetic tests that can be easily executed. The `torch_xla` plugin tests are more complex:
-they require `torch` and `torch_xla` to be installed, and they cannot run in parallel, since they are using either
-XRT server/client on the same port, or because they use a GPU or TPU device and there's only one available at the time.
-For that reason, all tests under `torch_xla/csrc/` are bundled into a single target `:main` that runs them all sequentially.
+اختبارات `xla_client` هي اختبارات محكمة بحتة يمكن تنفيذها بسهولة. اختبارات مكون `torch_xla` الإضافي أكثر تعقيدًا: فهي تتطلب تثبيت `torch` و`torch_xla`، ولا يمكن تشغيلها بالتوازي، لأنها تستخدم إما خادم/عميل XRT على نفس المنفذ، أو لأنها تستخدم جهاز GPU أو TPU ولا يتوفر سوى جهاز واحد في الوقت الحالي. لهذا السبب، يتم تجميع جميع الاختبارات الموجودة تحت `torch_xla/csrc/` في هدف واحد `:main` الذي يقوم بتشغيلها جميعًا بشكل تسلسلي.
 
-## Code coverage
+## تغطية الكود
 
-When running tests, it can be useful to calculate code coverage.
+عند تشغيل الاختبارات، قد يكون من المفيد حساب تغطية الكود.
 
 ```bash
 bazel coverage //torch_xla/csrc/runtime/...
 ```
 
-Coverage can be visualized using `lcov` as described in [Bazel's documentation](https://bazel.build/configure/coverage), or in your editor of choice with lcov plugins, e.g. [Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) for VSCode.
+يمكن تصور التغطية باستخدام `lcov` كما هو موضح في [توثيق Bazel](https://bazel.build/configure/coverage)، أو في محرر التعليمات البرمجية الخاص بك بمساعدة المكونات الإضافية لـ lcov، على سبيل المثال [Coverage Gutters](https://marketplace.visualstudio.com/items?itemName=ryanluker.vscode-coverage-gutters) لـ VSCode.
 
+## خادم اللغة
 
-## Language Server
+يمكن لـ Bazel تشغيل خادم لغة مثل [clangd](https://clangd.llvm.org/) الذي يجلب المراجع البرمجية، والإكمال التلقائي، والفهم الدلالي للكود الأساسي إلى محرر التعليمات البرمجية الخاص بك. بالنسبة لـ VSCode، يمكن للمرء استخدام [Bazel Stack](https://github.com/stackb/bazel-stack-vscode-cc) الذي يمكن دمجه مع وظيفة [clangd](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) لجلب ميزات قوية لمساعدة تحرير الكود.
 
-Bazel can power a language server like [clangd](https://clangd.llvm.org/) that brings code references, autocompletion and semantic understanding of the underlying code to your editor of choice. For VSCode,
-one can use [Bazel Stack](https://github.com/stackb/bazel-stack-vscode-cc) that can be combined with
-[clangd](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd) functionality to bring powerful features to assist code editing.
+## بناء PyTorch/XLA
 
-## Building PyTorch/XLA
-
-As always, PyTorch/XLA can be built using Python `distutils`:
+كما هو الحال دائمًا، يمكن بناء PyTorch/XLA باستخدام Python `distutils`:
 
 ```bash
 BAZEL_REMOTE_CACHE=1 SILO_NAME="cache-silo-YOUR-USER" TPUVM_MODE=1 python setup.py bdist_wheel
