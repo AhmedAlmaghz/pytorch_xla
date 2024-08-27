@@ -1,14 +1,14 @@
-## TorchDynamo(torch.compile) integration in PyTorch XLA
+## تكامل TorchDynamo (torch.compile) في PyTorch XLA
 
-[TorchDynamo](https://pytorch.org/docs/stable/torch.compiler.html) is a Python-level JIT compiler designed to make unmodified PyTorch programs faster. It provides a clean API for compiler backends to hook in and its biggest feature is to dynamically modify Python bytecode right before it is executed. In the pytorch/xla 2.0 release, PyTorch/XLA provided an experimental backend for the TorchDynamo for both inference and training.
+[TorchDynamo](https://pytorch.org/docs/stable/torch.compiler.html) هو مترجم JIT على مستوى Python مصمم لجعل برامج PyTorch غير المعدلة أسرع. فهو يوفر واجهة برمجة تطبيقات نظيفة لمؤخرات المترجم للربط بها، وتتمثل ميزته الأكبر في تعديل بايت كود Python ديناميكيًا مباشرة قبل تنفيذه. في إصدار pytorch/xla 2.0، قدم PyTorch/XLA مؤخرًا تجريبية لـ TorchDynamo لكل من الاستدلال والتدريب.
 
-The way that XLA bridge works is that Dynamo will provide a TorchFX graph when it recognizes a model pattern and PyTorch/XLA will use existing Lazy Tensor technology to compile the FX graph and return the compiled function.
+طريقة عمل جسر XLA هي أن Dynamo سيوفر رسم TorchFX عندما يتعرف على نمط نموذج، وسيستخدم PyTorch/XLA تقنية Tensor الكسول الحالية لتجميع رسم FX وإرجاع الدالة المجمعة.
 
-### Integration
+### التكامل
 
-Support for PyTorch/XLA and Dynamo currently exists by adding the `backend='openxla'` argument to `torch.compile`. For example:
+يتم دعم PyTorch/XLA وDynamo حاليًا عن طريق إضافة وسيط `backend='openxla'` إلى `torch.compile`. على سبيل المثال:
 
-```
+```py
 import torch
 import torch_xla.core.xla_model as xm
 
@@ -21,9 +21,9 @@ compiled_code = torch.compile(add, backend='openxla')
 print(compiled_code(torch.randn(10), torch.randn(10)))
 ```
 
+### الاستدلال
 
-### Inference
-Here is a small code example of running resnet18 with `torch.compile`
+فيما يلي مثال صغير على تشغيل resnet18 مع `torch.compile`
 
 ```python
 import torch
@@ -41,13 +41,13 @@ def eval_model(loader):
       output = dynamo_resnet18(data)
 ```
 
-With the `torch.compile` you will see that PyTorch/XLA only traces the resent18 model once during the init time and executes the compiled binary every time `dynamo_resnet18` is invoked, instead of tracing the model every time. Here is a inference speed analysis to compare Dynamo and Lazy using torch bench on Cloud TPU v4-8
+مع `torch.compile`، ستلاحظ أن PyTorch/XLA يقوم بتتبع نموذج resent18 مرة واحدة فقط أثناء وقت التشغيل وتنفيذ التعليمات البرمجية المجمعة في كل مرة يتم فيها استدعاء `dynamo_resnet18`، بدلاً من تتبع النموذج في كل مرة. فيما يلي تحليل لسرعة الاستدلال لمقارنة Dynamo وLazy باستخدام مقعد الشعلة على Cloud TPU v4-8
 
-| model | Speed up |
+| النموذج | تسريع |
 | --- | ----------- |
 resnet18 | 2.59
 resnet50 | 2.64
-resnext50_32x4d	| 1.91
+resnext50_32x4d| 1.91
 alexnet | 1.28
 mobilenet_v2 | 18.62
 mnasnet1_0 | 2.68
@@ -57,9 +57,9 @@ squeezenet1_1 | 2.29
 timm_vision_transformer | 3.52
 geomean | 3.04
 
+### التدريب
 
-### Training
-PyTorch/XLA also supports Dynamo for training, but it is  experimental and we are working with the PyTorch Compiler team to iterate on the implementation. Here is an example of training a resnet18 with `torch.compile`
+يدعم PyTorch/XLA أيضًا Dynamo للتدريب، ولكنه تجريبي ونحن نعمل مع فريق PyTorch Compiler لتحسين التنفيذ. فيما يلي مثال على تدريب resnet18 مع `torch.compile`
 
 ```python
 import torch
@@ -85,9 +85,9 @@ def train_model_main(loader):
     output = dynamo_train_model(xla_resnet18, data, target, xla_optimizer)
 ```
 
-We expect to extract and execute 3 graphs per training step instead of 1 graph per training step if you use the Lazy tensor. Here is a training speed analysis to compare Dynamo and Lazy using a torch bench on Cloud TPU v4-8.
+نتوقع استخراج وتنفيذ 3 رسومات لكل خطوة تدريب بدلاً من رسم بياني واحد لكل خطوة تدريب إذا كنت تستخدم Tensor الكسول. فيما يلي تحليل لسرعة التدريب لمقارنة Dynamo وLazy باستخدام مقعد الشعلة على Cloud TPU v4-8.
 
-| model | Speed up |
+| النموذج | تسريع |
 | --- | ----------- |
 resnet50 | 1.33
 resnet18 | 1.33
@@ -101,16 +101,18 @@ timm_vision_transformer | 1.87
 squeezenet1_1 | 1.41
 geomean | 1.41
 
-> **NOTE:** We run each model's fwd and bwd for a single step and then collect the e2e time. In the real world we will run multiple steps at each training job which can easily hide the tracing cost from execution(since it is async). Lazy Tensor will have much better performance in that scenario.
+> **ملاحظة:** نقوم بتشغيل fwd وbwd لكل نموذج لخطوة واحدة ثم نجمع وقت e2e. في العالم الحقيقي، سنقوم بتشغيل خطوات متعددة في كل مهمة تدريب يمكن أن تخفي بسهولة تكلفة التتبع من التنفيذ (بما أنه غير متزامر). سيكون Tensor الكسول أداء أفضل بكثير في هذا السيناريو.
 
-### Feature gaps
-There is one gap we want to call out that are preventing us from using the TorchDynamo on larger scale models.
+### الفجوات الميزة
 
-1. TorchDynamo will trace forward and backward into separate graphs. For PyTorch/XLA it is important to let the XLA compiler see the whole step as one graph to best optimize the speed. There is also a fixed overhead to launch every device execution which make executing multiple graphs per training step less ideal.
+هناك فجوة واحدة نريد أن نوضحها تمنعنا من استخدام TorchDynamo على نماذج أكبر.
 
-This gap compared to Lazy Tensor makes it less efficient in real world training use cases, especially the tracing cost can be overlapped with the execution in training.
+1. سيقوم TorchDynamo بتتبع الخطوات إلى الأمام والخلف في رسومات منفصلة. بالنسبة لـ PyTorch/XLA، من المهم السماح لمترجم XLA برؤية الخطوة الكاملة كرسم بياني واحد لتحسين السرعة بشكل أفضل. هناك أيضًا تكلفة ثابتة لإطلاق كل تنفيذ جهاز، مما يجعل تنفيذ رسومات متعددة لكل خطوة تدريب أقل مثالية.
 
-### Take away
-TorchDynamo provides a really promising way for the compiler backend to hide the complexity from the user and easily retrieve the modeling code in a graph format. Compared with PyTorch/XLA's traditional Lazy Tensor way of extracting the graph, TorchDynamo can skip the graph tracing for every iteration, hence providing a much better inference response time.
+تجعل هذه الفجوة مقارنة بـ Tensor الكسول أقل كفاءة في حالات الاستخدام التدريبية في العالم الحقيقي، خاصة أن تكلفة التتبع يمكن أن تتداخل مع التنفيذ في التدريب.
 
-Most models supported by PyTorch/XLA, have seen significant speedup when running inference with the new dynamo-xla bridge. Our community is working hard to expand the set of supported models. Regarding the training feature gaps mentioned above, the PyTorch/XLA community is super excited to improve the training gap in our upcoming development work. The team continues to heavily invest in TorchDynamo and work with the upstream to mature the training story.
+### خلاصة
+
+يوفر TorchDynamo طريقة واعدة لمؤخرات المترجم لإخفاء التعقيد عن المستخدم واسترداد رمز النمذجة بسهولة بتنسيق الرسم البياني. مقارنة بطريقة Tensor الكسول التقليدية لـ PyTorch/XLA لاستخراج الرسم البياني، يمكن لـ TorchDynamo تخطي تتبع الرسم البياني لكل تكرار، مما يوفر وقت استجابة أفضل للاستدلال.
+
+شهدت معظم النماذج التي يدعمها PyTorch/XLA تسريعًا كبيرًا عند تشغيل الاستدلال بجسر dynamo-xla الجديد. يعمل مجتمعنا بجد لتوسيع مجموعة النماذج المدعومة. فيما يتعلق بفجوات ميزات التدريب المذكورة أعلاه، فإن مجتمع PyTorch/XLA متحمس للغاية لتحسين فجوة التدريب في عمل التطوير القادم لدينا. يواصل الفريق الاستثمار بكثافة في TorchDynamo والعمل مع الجهات الخارجية لتحسين قصة التدريب.
