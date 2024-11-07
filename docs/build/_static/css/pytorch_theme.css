@@ -1,6 +1,19 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+
 body {
-    font-family: "Lato","proxima-nova","Helvetica Neue",Arial,sans-serif;
+    font-family: 'Tajawal', sans-serif;
+    direction: rtl !important;
+    text-align: right !important;
 }
+
+pre {
+  direction: ltr;
+  text-align: left;
+}
+
+/* body {
+    font-family: "Lato","proxima-nova","Helvetica Neue",Arial,sans-serif;
+} */
 
 /* Default header fonts are ugly */
 h1, h2, .rst-content .toctree-wrapper p.caption, h3, h4, h5, h6, legend, p.caption {
