@@ -5,6 +5,18 @@
  * Copyright 2011-2018 Twitter, Inc.
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
  */
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+
+body {
+    font-family: 'Tajawal', sans-serif;
+    direction: rtl !important;
+    text-align: right !important;
+}
+
+pre {
+  direction: ltr;
+  text-align: left;
+}
 :root {
   --blue: #007bff;
   --indigo: #6610f2;
