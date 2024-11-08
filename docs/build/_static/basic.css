@@ -10,7 +10,7 @@
  */
 
 /* -- main layout ----------------------------------------------------------- */
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+/* @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
 
 body {
     font-family: 'Tajawal', sans-serif;
@@ -21,7 +21,7 @@ body {
 pre {
   direction: ltr;
   text-align: left;
-}
+} */
 
 div.clearer {
     clear: both;
