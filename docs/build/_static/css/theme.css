@@ -9,8 +9,8 @@
 
 body {
     font-family: 'Tajawal', sans-serif;
-    direction: rtl !important;
-    text-align: right !important;
+/*     direction: rtl !important;
+    text-align: right !important; */
 }
 
 pre {
@@ -11771,6 +11771,8 @@ article.pytorch-article .tutorials-callout-container .btn.callout-button a {
 }
 .pytorch-content-left .main-content {
   padding-top: 0.9375rem;
+  direction: rtl !important;
+  text-align: right !important;
 }
 .pytorch-content-left .main-content ul.simple {
   padding-bottom: 1.25rem;
