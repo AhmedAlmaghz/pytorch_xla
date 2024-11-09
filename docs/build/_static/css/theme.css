@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
 @charset "UTF-8";
 /*!
  * Bootstrap v4.0.0 (https://getbootstrap.com)
@@ -5,12 +6,9 @@
  * Copyright 2011-2018 Twitter, Inc.
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/master/LICENSE)
  */
-@import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
 
 body {
     font-family: 'Tajawal', sans-serif;
-/*     direction: rtl !important;
-    text-align: right !important; */
 }
 
 pre {
@@ -11770,9 +11768,11 @@ article.pytorch-article .tutorials-callout-container .btn.callout-button a {
   }
 }
 .pytorch-content-left .main-content {
-  padding-top: 0.9375rem;
+  font-family: 'Tajawal', sans-serif !important;
   direction: rtl !important;
   text-align: right !important;
+  padding-top: 0.9375rem;
+  padding-right: 0.5rem;
 }
 .pytorch-content-left .main-content ul.simple {
   padding-bottom: 1.25rem;
